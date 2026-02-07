@@ -1,0 +1,1 @@
+{"sample_id":"000000","split":"train","width":1024,"height":768,"fps":16,"seconds":3.0,"num_frames":48,"question":"Where is the sun in the scene? Choose A/B/C/D.","choices":["A: left","B: right","C: down","D: up"],"answer":"A","frames_dir":"000000/frames"}

@@ -201,6 +201,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Generated datasets / artifacts
+data/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

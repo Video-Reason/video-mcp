@@ -171,9 +171,12 @@ def download_corecognition_complete_zip(*, out_dir: Path | None = None) -> Path:
     return p
 
 
-def iter_corecognition_rows(*, split: str = "train", config: str = "default"):
+def iter_corecognition_rows(*, split: str = "train", config: str = "default", zip_path: Path | None = None):
     """
     Yield raw rows as dicts matching `CoreCognitionRawRow`.
+
+    When *config* is ``"complete"`` you can pass an already-resolved *zip_path*
+    to avoid a redundant ``hf_hub_download`` call.
     """
     if config != "complete":
         ds = load_corecognition_dataset(split=split, config=config)
@@ -185,10 +188,10 @@ def iter_corecognition_rows(*, split: str = "train", config: str = "default"):
     # (split is currently always train in this dataset release)
     _ = split
 
-    zip_path = download_corecognition_complete_zip()
+    resolved = zip_path or download_corecognition_complete_zip()
     csv_name = "CoreCognition_20250622/CoreCognition.csv"
 
-    with zipfile.ZipFile(zip_path) as z:
+    with zipfile.ZipFile(resolved) as z:
         data = z.read(csv_name)
 
     text = data.decode("utf-8", errors="replace")
@@ -197,8 +200,10 @@ def iter_corecognition_rows(*, split: str = "train", config: str = "default"):
         yield row
 
 
-def iter_corecognition_mcqa_single_image(*, split: str = "train", config: str = "default"):
-    for row in iter_corecognition_rows(split=split, config=config):
+def iter_corecognition_mcqa_single_image(
+    *, split: str = "train", config: str = "default", zip_path: Path | None = None,
+):
+    for row in iter_corecognition_rows(split=split, config=config, zip_path=zip_path):
         raw = CoreCognitionRawRow.model_validate(row)
 
         if str(raw.type).strip().upper() != "MC":
@@ -304,7 +309,7 @@ class CoreCognitionAdapter(DatasetAdapter):
         zip_path = download_corecognition_complete_zip()
         with zipfile.ZipFile(zip_path) as z:
             available = set(z.namelist())
-            for ex in iter_corecognition_mcqa_single_image(split=split, config="complete"):
+            for ex in iter_corecognition_mcqa_single_image(split=split, config="complete", zip_path=zip_path):
                 if ex.media_path not in available:
                     continue
                 image_bytes = z.read(ex.media_path)

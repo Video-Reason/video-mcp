@@ -88,11 +88,11 @@ python -m video_mcp.dataset process --dataset corecognition
 ```
 
 Notes:
-- `download` places raw artifacts under `data/raw/...` (symlinked by default to avoid duplicating large files).
+- `download` places raw artifacts under `data/raw/...` (downloaded directly; no HF-cache symlinks).
 - `process` generates the **Video-MCP clip frames** under `data/processed/...`.
 
 ### CoreCognition specifics
 
 - Current supported subset: **single-image MCQA VQA** from CoreCognition (753 samples).
-- Source raw artifact: `CoreCognition_20250622.zip` (stored under `data/raw/corecognition/` as a symlink to the local HF cache).
+- Source raw artifact: `CoreCognition_20250622.zip` (stored under `data/raw/corecognition/`).
 

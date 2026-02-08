@@ -13,7 +13,6 @@ class VideoMcpSample(BaseModel):
     """
 
     dataset: str = Field(description="Source dataset name, e.g. 'CoreCognition'.")
-    split: str = Field(description="Split name, e.g. 'train'.")
     source_id: str = Field(description="Original dataset row id.")
 
     task: Literal["mcqa_vqa"] = "mcqa_vqa"

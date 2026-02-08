@@ -26,7 +26,6 @@ def main(argv: list[str] | None = None) -> None:
     proc = sub.add_parser("process", help="Process raw datasets into data/processed/...")
     proc.add_argument("--dataset", type=str, required=True, choices=available)
     proc.add_argument("--out-dir", type=Path, default=Path("data/processed"))
-    proc.add_argument("--split", type=str, default="train")
     proc.add_argument("--limit", type=int, default=None)
 
     args = p.parse_args(argv)
@@ -39,7 +38,7 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "process":
         adapter = get_adapter(args.dataset)
         out_root = Path(args.out_dir) / f"{args.dataset}_video_mcp"
-        n = build_video_mcp_clips(adapter, out_dir=out_root, split=args.split, limit=args.limit)
+        n = build_video_mcp_clips(adapter, out_dir=out_root, limit=args.limit)
         print(f"Wrote {n} Video-MCP samples to {out_root}")
 
 

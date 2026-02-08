@@ -60,7 +60,7 @@ class DatasetAdapter(ABC):
         ...
 
     @abstractmethod
-    def iter_mcqa_vqa(self, *, split: str) -> Iterator[tuple[McqaVqaSample, bytes]]:
+    def iter_mcqa_vqa(self) -> Iterator[tuple[McqaVqaSample, bytes]]:
         """
         Yield ``(sample, image_bytes)`` pairs.
 

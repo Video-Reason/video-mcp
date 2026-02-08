@@ -30,7 +30,6 @@ def main(argv: list[str] | None = None) -> None:
     )
     build.add_argument("--dataset", type=str, required=True, choices=available)
     build.add_argument("--out-dir", type=Path, default=Path("data/video_mcp"))
-    build.add_argument("--split", type=str, default="train")
 
     # ---- build-clips (rendered MCQA overlay frames) ----------------------
     clips = sub.add_parser(
@@ -39,7 +38,6 @@ def main(argv: list[str] | None = None) -> None:
     )
     clips.add_argument("--dataset", type=str, required=True, choices=available)
     clips.add_argument("--out-dir", type=Path, default=Path("data/video_mcp_clips"))
-    clips.add_argument("--split", type=str, default="train")
     clips.add_argument("--limit", type=int, default=None, help="Only build first N samples (for testing).")
 
     args = p.parse_args(argv)
@@ -52,11 +50,11 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "build":
         adapter = get_adapter(args.dataset)
         out_root = Path(args.out_dir) / args.dataset
-        n = build_video_mcp(adapter, out_dir=out_root, split=args.split)
-        print(f"Wrote {n} samples to {out_root / args.split}/metadata.jsonl")
+        n = build_video_mcp(adapter, out_dir=out_root)
+        print(f"Wrote {n} samples to {out_root}/metadata.jsonl")
 
     elif args.cmd == "build-clips":
         adapter = get_adapter(args.dataset)
         out_root = Path(args.out_dir) / args.dataset
-        n = build_video_mcp_clips(adapter, out_dir=out_root, split=args.split, limit=args.limit)
+        n = build_video_mcp_clips(adapter, out_dir=out_root, limit=args.limit)
         print(f"Wrote {n} clip samples to {out_root}")

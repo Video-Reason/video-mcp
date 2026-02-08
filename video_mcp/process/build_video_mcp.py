@@ -10,28 +10,25 @@ def build_video_mcp(
     adapter: DatasetAdapter,
     *,
     out_dir: Path,
-    split: str = "train",
 ) -> int:
     """
     Build a standardised Video-MCP dataset from **any** adapter.
 
     out_dir/
-      <split>/
-        metadata.jsonl
-        images/
-          <source_id>__<original_filename>
+      metadata.jsonl
+      images/
+        <source_id>__<original_filename>
     """
     out_dir = Path(out_dir)
-    split_dir = out_dir / split
-    images_dir = split_dir / "images"
-    split_dir.mkdir(parents=True, exist_ok=True)
+    images_dir = out_dir / "images"
+    out_dir.mkdir(parents=True, exist_ok=True)
     images_dir.mkdir(parents=True, exist_ok=True)
 
-    metadata_path = split_dir / "metadata.jsonl"
+    metadata_path = out_dir / "metadata.jsonl"
 
     n = 0
     with metadata_path.open("w", encoding="utf-8") as f:
-        for sample, image_bytes in adapter.iter_mcqa_vqa(split=split):
+        for sample, image_bytes in adapter.iter_mcqa_vqa():
             n += 1
             print(f"[{n}] {adapter.name}_{sample.source_id}")
 
@@ -39,11 +36,10 @@ def build_video_mcp(
             out_file = images_dir / out_name
             if not out_file.exists():
                 out_file.write_bytes(image_bytes)
-            image_rel = str(out_file.relative_to(split_dir))
+            image_rel = str(out_file.relative_to(out_dir))
 
             vmc = VideoMcpSample(
                 dataset=sample.dataset,
-                split=split,
                 source_id=sample.source_id,
                 question=sample.question,
                 choices=sample.choices,
@@ -51,6 +47,5 @@ def build_video_mcp(
                 image_path=image_rel,
             )
             f.write(vmc.model_dump_json() + "\n")
-            n += 1
 
     return n

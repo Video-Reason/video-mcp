@@ -305,11 +305,11 @@ class CoreCognitionAdapter(DatasetAdapter):
     def download(self, *, out_dir: Path) -> Path:
         return download_corecognition_complete_zip(out_dir=out_dir)
 
-    def iter_mcqa_vqa(self, *, split: str) -> Iterator[tuple[McqaVqaSample, bytes]]:
+    def iter_mcqa_vqa(self) -> Iterator[tuple[McqaVqaSample, bytes]]:
         zip_path = download_corecognition_complete_zip()
         with zipfile.ZipFile(zip_path) as z:
             available = set(z.namelist())
-            for ex in iter_corecognition_mcqa_single_image(split=split, config="complete", zip_path=zip_path):
+            for ex in iter_corecognition_mcqa_single_image(split="train", config="complete", zip_path=zip_path):
                 if ex.media_path not in available:
                     continue
                 image_bytes = z.read(ex.media_path)

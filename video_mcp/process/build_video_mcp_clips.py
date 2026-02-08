@@ -33,7 +33,6 @@ def build_video_mcp_clips(
     adapter: DatasetAdapter,
     *,
     out_dir: Path,
-    split: str = "train",
     video: VideoSpec | None = None,
     limit: int | None = None,
 ) -> int:
@@ -62,7 +61,7 @@ def build_video_mcp_clips(
 
     total = f"/{limit}" if limit is not None else ""
     n = 0
-    for sample, image_bytes in adapter.iter_mcqa_vqa(split=split):
+    for sample, image_bytes in adapter.iter_mcqa_vqa():
         if limit is not None and n >= int(limit):
             break
 

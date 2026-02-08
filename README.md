@@ -29,7 +29,6 @@ python -m video_mcp.dataset process --dataset corecognition
 ```
 
 Notes:
-- `process` currently renders Video-MCP clips from the **complete** CoreCognition ZIP (`--config complete`).
 - Use `--limit N` to build only the first N samples (useful for quick testing).
 
 ## Adding a new dataset
@@ -49,7 +48,7 @@ three methods:
 |---|---|
 | `name` (property) | Short slug used in `--dataset` flags, e.g. `"scienceqa"` |
 | `download(*, out_dir)` | Download the raw data and return the local path |
-| `iter_mcqa_vqa(*, split)` | Yield `(McqaVqaSample, image_bytes)` pairs |
+| `iter_mcqa_vqa()` | Yield `(McqaVqaSample, image_bytes)` pairs |
 
 Minimal skeleton:
 
@@ -77,7 +76,7 @@ class ScienceQaAdapter(DatasetAdapter):
         # Download or locate the raw data; return the artifact path.
         ...
 
-    def iter_mcqa_vqa(self, *, split: str) -> Iterator[tuple[McqaVqaSample, bytes]]:
+    def iter_mcqa_vqa(self) -> Iterator[tuple[McqaVqaSample, bytes]]:
         # Yield (sample, image_bytes) for every MCQA-VQA example.
         ...
 ```

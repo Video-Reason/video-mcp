@@ -134,26 +134,38 @@ def load_corecognition_dataset(*, split: str = "train", config: str = "default")
     )
 
 
-def download_corecognition_complete_zip() -> Path:
+def download_corecognition_complete_zip(*, out_dir: Path | None = None) -> Path:
     """
-    Download the complete ZIP from the HF dataset repo into the local HF cache.
+    Download the complete CoreCognition ZIP directly into data/raw (by default).
     Requires HF_TOKEN for gated access.
     """
     import os
+    import shutil
 
     from huggingface_hub import hf_hub_download
 
     token = os.environ.get("HF_TOKEN") or None
-    cache_dir = os.environ.get("HF_HUB_CACHE") or os.environ.get("HUGGINGFACE_HUB_CACHE") or "hf_home/hub"
+    out_root = Path(out_dir) if out_dir is not None else Path("data/raw/corecognition")
+    out_root.mkdir(parents=True, exist_ok=True)
 
     zip_path = hf_hub_download(
         repo_id="williamium/CoreCognition",
         repo_type="dataset",
         filename="CoreCognition_20250622.zip",
         token=token,
-        cache_dir=str(cache_dir),
+        local_dir=str(out_root),
     )
-    return Path(zip_path)
+    p = Path(zip_path)
+
+    # Ensure the artifact living in data/raw is a real file (not a symlink to an HF cache path).
+    if p.is_symlink():
+        target = p.resolve()
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        shutil.copyfile(target, tmp)
+        p.unlink()
+        tmp.rename(p)
+
+    return p
 
 
 def iter_corecognition_rows(*, split: str = "train", config: str = "default"):

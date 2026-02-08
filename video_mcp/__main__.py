@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from video_mcp.generate_dataset import main
+from video_mcp.cli import main
 
 
 if __name__ == "__main__":

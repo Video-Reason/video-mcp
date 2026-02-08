@@ -204,6 +204,10 @@ cython_debug/
 # Generated datasets / artifacts
 data/
 
+# Local caches / secrets
+hf_home/
+.hf_home/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

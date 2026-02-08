@@ -7,7 +7,9 @@ For the authoritative spec, see `docs/VIDEO_MCP_DATA.md`.
 
 ## Quickstart
 
-Create a venv, install pinned deps, and set your secrets:
+### 1. Setup
+
+Create a venv and install dependencies:
 
 ```bash
 python -m venv venv
@@ -21,6 +23,14 @@ Create `.env` (local, gitignored) with at least:
 HF_TOKEN=...
 ```
 
+### 2. Download and process
+
+**IMPORTANT:** Always activate the venv before running commands:
+
+```bash
+source venv/bin/activate
+```
+
 Download raw data and build processed Video-MCP outputs:
 
 ```bash
@@ -28,10 +38,36 @@ python -m video_mcp.dataset download --dataset corecognition
 python -m video_mcp.dataset process  --dataset corecognition
 ```
 
-Notes:
-- Use `--limit N` to build only the first N samples (useful for quick testing).
-- Use `--lit-style darken` (default) or `--lit-style red_border` to choose how the correct answer is highlighted.
-- Requires `ffmpeg` on the system PATH (used to compile frames into MP4 video).
+### Video specifications (Wan2.2-I2V-A14B)
+
+Default output specs are aligned with **Wan2.2-I2V-A14B** fine-tuning requirements:
+
+- **Resolution**: 832×480 (480p tier)
+- **Frames**: 81 @ 16 FPS (~5 seconds)
+- **Codec**: H.264, yuv420p, MP4 container
+
+Override with CLI flags:
+
+```bash
+# 720p, 81 frames (higher quality, more VRAM)
+python -m video_mcp.dataset process --dataset corecognition --width 1280 --height 720
+
+# 480p, 49 frames (lighter runs)
+python -m video_mcp.dataset process --dataset corecognition --num-frames 49
+```
+
+**Constraints** (enforced by Pydantic validators):
+- Width and height must be divisible by **8** (VAE spatial compression)
+- Frame count must satisfy **1 + 4k** where k ≥ 0 (VAE temporal compression): 1, 5, 9, 13, ..., 49, ..., 81
+
+### Additional options
+
+- `--limit N` — Build only the first N samples (useful for quick testing)
+- `--lit-style darken` (default) or `--lit-style red_border` — How the correct answer is highlighted
+
+### Requirements
+
+- `ffmpeg` must be on the system PATH (used to compile frames into MP4 video)
 
 ## Adding a new dataset
 
@@ -122,9 +158,9 @@ data/processed/corecognition_video_mcp/
       question.json              # question, choices, answer, source metadata
       <original_image_file>
     frames/
-      frame_0000.png … frame_0047.png   # 48 rendered PNG frames
+      frame_0000.png … frame_0080.png   # 81 rendered PNG frames (default)
     video/
-      clip.mp4                   # compiled MP4 video (H.264)
+      clip.mp4                   # compiled MP4 video (H.264, yuv420p, 832×480)
   corecognition_2/
     ...
 ```
@@ -135,7 +171,7 @@ Each frame uses a **two-column panel** (image on left, question + choices on rig
 with A/B/C/D answer boxes in the four corners of the frame.
 
 - **Frame 0**: Question panel visible, no answer highlighted.
-- **Frames 1–47**: Correct answer gradually highlights across the full clip duration.
+- **Frames 1–80** (default): Correct answer gradually highlights across the full clip duration.
 
 ### Highlight styles (`--lit-style`)
 

@@ -135,8 +135,7 @@ Each frame uses a **two-column panel** (image on left, question + choices on rig
 with A/B/C/D answer boxes in the four corners of the frame.
 
 - **Frame 0**: Question panel visible, no answer highlighted.
-- **Frames 1–16**: Correct answer gradually highlights (~1 second fade-in).
-- **Frames 17–47**: Correct answer fully highlighted.
+- **Frames 1–47**: Correct answer gradually highlights across the full clip duration.
 
 ### Highlight styles (`--lit-style`)
 
@@ -144,3 +143,13 @@ with A/B/C/D answer boxes in the four corners of the frame.
 |---|---|
 | `darken` (default) | Correct corner box gradually darkens |
 | `red_border` | Thick red outline gradually appears around the correct corner box |
+
+## S3 upload
+
+Processed datasets are synced to S3 for sharing:
+
+```bash
+aws s3 sync data/processed/ s3://video-mcp/data/processed/ --delete
+```
+
+Requires AWS credentials configured via `aws configure` or environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).

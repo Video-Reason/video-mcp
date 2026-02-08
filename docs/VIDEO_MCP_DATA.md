@@ -30,13 +30,9 @@ For each clip:
   - Shows the full question panel (image + question + choices) and the four corner answer boxes.
   - **No highlight** on frame 0 (the model is "reading").
 
-- **Frames 1–~16 (`frame_0001.png` … `frame_0016.png`)**:
+- **Frames 1–47 (`frame_0001.png` … `frame_0047.png`)**:
   - Question panel remains visible.
-  - The correct answer's corner box **gradually highlights** over ~1 second (fade-in).
-
-- **Frames ~17–47 (`frame_0017.png` … `frame_0047.png`)**:
-  - Question panel remains visible.
-  - The correct answer's corner box is **fully highlighted**.
+  - The correct answer's corner box **gradually highlights** across the full clip duration (linear fade-in from frame 1 to frame 47).
 
 ### Highlight styles (`--lit-style`)
 

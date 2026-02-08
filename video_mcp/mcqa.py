@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Literal, cast
 
 Choice = Literal["A", "B", "C", "D"]
+LitStyle = Literal["darken", "red_border"]
 
+LIT_STYLES: tuple[LitStyle, ...] = ("darken", "red_border")
 CHOICE_ORDER: tuple[Choice, ...] = ("A", "B", "C", "D")
 
 

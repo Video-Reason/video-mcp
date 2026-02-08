@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from video_mcp.mcqa import LIT_STYLES, LitStyle
 from video_mcp.process.adapter import get_adapter, list_adapters
 from video_mcp.process.build_video_mcp_clips import build_video_mcp_clips
 from video_mcp.env import load_env_file
@@ -27,6 +28,13 @@ def main(argv: list[str] | None = None) -> None:
     proc.add_argument("--dataset", type=str, required=True, choices=available)
     proc.add_argument("--out-dir", type=Path, default=Path("data/processed"))
     proc.add_argument("--limit", type=int, default=None)
+    proc.add_argument(
+        "--lit-style",
+        type=str,
+        choices=list(LIT_STYLES),
+        default="darken",
+        help="How the correct answer is highlighted: 'darken' darkens the box, 'red_border' draws a red outline.",
+    )
 
     args = p.parse_args(argv)
 
@@ -37,8 +45,9 @@ def main(argv: list[str] | None = None) -> None:
 
     elif args.cmd == "process":
         adapter = get_adapter(args.dataset)
+        lit_style: LitStyle = args.lit_style
         out_root = Path(args.out_dir) / f"{args.dataset}_video_mcp"
-        n = build_video_mcp_clips(adapter, out_dir=out_root, limit=args.limit)
+        n = build_video_mcp_clips(adapter, out_dir=out_root, limit=args.limit, lit_style=lit_style)
         print(f"Wrote {n} Video-MCP samples to {out_root}")
 
 

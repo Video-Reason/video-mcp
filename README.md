@@ -25,11 +25,13 @@ Download raw data and build processed Video-MCP outputs:
 
 ```bash
 python -m video_mcp.dataset download --dataset corecognition
-python -m video_mcp.dataset process --dataset corecognition
+python -m video_mcp.dataset process  --dataset corecognition
 ```
 
 Notes:
 - Use `--limit N` to build only the first N samples (useful for quick testing).
+- Use `--lit-style darken` (default) or `--lit-style red_border` to choose how the correct answer is highlighted.
+- Requires `ffmpeg` on the system PATH (used to compile frames into MP4 video).
 
 ## Adding a new dataset
 
@@ -110,7 +112,35 @@ CoreCognition processed output root:
 Dataset-level config:
 - `data/processed/corecognition_video_mcp/clip_config.json`
 
-Each sample:
-- `data/processed/corecognition_video_mcp/<sample_id>/original/question.json`
-- `data/processed/corecognition_video_mcp/<sample_id>/original/<original_image_file>`
-- `data/processed/corecognition_video_mcp/<sample_id>/frames/frame_0000.png ... frame_0047.png`
+Each sample (ID format: `<datasetname>_<n>`):
+
+```
+data/processed/corecognition_video_mcp/
+  clip_config.json
+  corecognition_1/
+    original/
+      question.json              # question, choices, answer, source metadata
+      <original_image_file>
+    frames/
+      frame_0000.png … frame_0047.png   # 48 rendered PNG frames
+    video/
+      clip.mp4                   # compiled MP4 video (H.264)
+  corecognition_2/
+    ...
+```
+
+### Frame layout
+
+Each frame uses a **two-column panel** (image on left, question + choices on right)
+with A/B/C/D answer boxes in the four corners of the frame.
+
+- **Frame 0**: Question panel visible, no answer highlighted.
+- **Frames 1–16**: Correct answer gradually highlights (~1 second fade-in).
+- **Frames 17–47**: Correct answer fully highlighted.
+
+### Highlight styles (`--lit-style`)
+
+| Style | Effect |
+|---|---|
+| `darken` (default) | Correct corner box gradually darkens |
+| `red_border` | Thick red outline gradually appears around the correct corner box |

@@ -6,7 +6,7 @@ from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFont
 
-from video_mcp.mcqa import Choice
+from video_mcp.mcqa import Choice, LitStyle
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ def _pick_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 
 def make_fonts() -> Fonts:
-    return Fonts(title=_pick_font(34), body=_pick_font(22), small=_pick_font(18))
+    return Fonts(title=_pick_font(44), body=_pick_font(30), small=_pick_font(26))
 
 
 def _wrap_text(
@@ -71,12 +71,42 @@ def _fit_into_box(img: Image.Image, *, box_w: int, box_h: int) -> Image.Image:
     return img.resize((nw, nh))
 
 
+def _lerp_color(
+    a: tuple[int, int, int],
+    b: tuple[int, int, int],
+    t: float,
+) -> tuple[int, int, int]:
+    """Linearly interpolate between two RGB colours by factor *t* (0→a, 1→b)."""
+    t = max(0.0, min(1.0, t))
+    return (
+        int(round(a[0] + (b[0] - a[0]) * t)),
+        int(round(a[1] + (b[1] - a[1]) * t)),
+        int(round(a[2] + (b[2] - a[2]) * t)),
+    )
+
+
+# Colours for the corner choice boxes.
+_BOX_BASE: tuple[int, int, int] = (245, 245, 245)
+_LETTER_BASE: tuple[int, int, int] = (30, 30, 30)
+_OUTLINE_BASE: tuple[int, int, int] = (60, 60, 60)
+
+# "darken" style: box darkens, letter stays dark.
+_BOX_DARKEN: tuple[int, int, int] = (140, 140, 140)
+
+# "red_border" style: thick red outline.
+_RED_BORDER: tuple[int, int, int] = (220, 30, 30)
+_RED_BORDER_WIDTH = 6
+
+
 def draw_corner_choices(
     canvas: Image.Image,
     *,
     lit_choice: Choice | None,
+    lit_progress: float = 1.0,
+    lit_style: LitStyle = "darken",
     fonts: Fonts,
 ) -> None:
+    """Draw A/B/C/D corner boxes. *lit_progress* (0‑1) fades the highlight."""
     draw = ImageDraw.Draw(canvas)
     w, h = canvas.size
 
@@ -93,16 +123,24 @@ def draw_corner_choices(
     }
 
     for c, (x1, y1, x2, y2) in boxes.items():
-        is_lit = lit_choice == c
-        fill = (80, 80, 80) if is_lit else (245, 245, 245)
-        outline = (60, 60, 60)
-        draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=fill, outline=outline, width=3)
+        is_target = lit_choice == c
+        t = lit_progress if is_target else 0.0
 
-        letter_fill = (255, 255, 255) if is_lit else (30, 30, 30)
+        if lit_style == "darken":
+            fill = _lerp_color(_BOX_BASE, _BOX_DARKEN, t)
+            outline = _OUTLINE_BASE
+            outline_w = 3
+        else:  # red_border
+            fill = _BOX_BASE
+            outline = _lerp_color(_OUTLINE_BASE, _RED_BORDER, t)
+            outline_w = int(round(3 + (_RED_BORDER_WIDTH - 3) * t)) if is_target else 3
+
+        draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=fill, outline=outline, width=outline_w)
+
         bb = draw.textbbox((0, 0), c, font=fonts.title)
         lw = bb[2] - bb[0]
         lh = bb[3] - bb[1]
-        draw.text((x1 + (box_w - lw) / 2, y1 + (box_h - lh) / 2 - 2), c, font=fonts.title, fill=letter_fill)
+        draw.text((x1 + (box_w - lw) / 2, y1 + (box_h - lh) / 2 - 2), c, font=fonts.title, fill=_LETTER_BASE)
 
 
 def draw_question_panel(
@@ -113,69 +151,112 @@ def draw_question_panel(
     image: Image.Image | None,
     fonts: Fonts,
 ) -> None:
+    """
+    Two-column panel layout:
+      - Left column : large image
+      - Right column: question text + choice options
+
+    The panel is sized to sit between the A/B/C/D corner boxes with a
+    small gap so nothing overlaps.
+    """
     draw = ImageDraw.Draw(canvas)
     w, h = canvas.size
 
-    panel_w = int(w * 0.62)
-    panel_h = int(h * 0.46)
-    px1 = int((w - panel_w) / 2)
-    py1 = int((h - panel_h) / 2)
-    px2 = px1 + panel_w
-    py2 = py1 + panel_h
+    # Mirror the corner-box geometry so the panel avoids them.
+    cb_margin = int(min(w, h) * 0.06)
+    cb_box_w = int(min(w, h) * 0.14)
+    cb_box_h = int(cb_box_w * 0.75)
+    gap = 14  # breathing room between corner boxes and panel
 
-    draw.rounded_rectangle([px1, py1, px2, py2], radius=18, fill=(235, 235, 235), outline=(120, 120, 120), width=3)
+    px1 = cb_margin + cb_box_w + gap
+    py1 = cb_margin + cb_box_h + gap
+    px2 = w - cb_margin - cb_box_w - gap
+    py2 = h - cb_margin - cb_box_h - gap
+    panel_w = px2 - px1
+    panel_h = py2 - py1
 
-    header_h = int(panel_h * 0.22)
-    draw.rectangle([px1, py1, px2, py1 + header_h], fill=(245, 245, 245), outline=(120, 120, 120), width=3)
-    header_text = "Questions"
+    draw.rounded_rectangle(
+        [px1, py1, px2, py2], radius=18,
+        fill=(235, 235, 235), outline=(120, 120, 120), width=3,
+    )
+
+    # --- header bar ---
+    header_h = int(panel_h * 0.11)
+    draw.rounded_rectangle(
+        [px1, py1, px2, py1 + header_h], radius=18,
+        fill=(245, 245, 245), outline=(120, 120, 120), width=3,
+    )
+    header_text = "Question"
     hb = draw.textbbox((0, 0), header_text, font=fonts.title)
-    draw.text((px1 + (panel_w - (hb[2] - hb[0])) / 2, py1 + (header_h - (hb[3] - hb[1])) / 2 - 2), header_text, font=fonts.title, fill=(30, 30, 30))
+    draw.text(
+        (px1 + (panel_w - (hb[2] - hb[0])) / 2,
+         py1 + (header_h - (hb[3] - hb[1])) / 2 - 2),
+        header_text, font=fonts.title, fill=(30, 30, 30),
+    )
 
-    padding = 18
-    body_x1 = px1 + padding
-    body_x2 = px2 - padding
-    y = py1 + header_h + padding
-    max_w = body_x2 - body_x1
+    # --- content area below header ---
+    pad = 20
+    content_y1 = py1 + header_h + pad
+    content_y2 = py2 - pad
+    content_h = content_y2 - content_y1
 
-    for line in _wrap_text(draw, question, fonts.body, max_width_px=max_w)[:3]:
-        draw.text((body_x1, y), line, font=fonts.body, fill=(20, 20, 20))
-        bb = draw.textbbox((0, 0), line, font=fonts.body)
-        y += (bb[3] - bb[1]) + 6
+    # Left column — image (55 % of panel width)
+    img_col_w = int(panel_w * 0.55)
+    img_x1 = px1 + pad
+    img_x2 = px1 + img_col_w - pad // 2
+    img_y1 = content_y1
+    img_y2 = content_y2
+    img_box_w = img_x2 - img_x1
+    img_box_h = img_y2 - img_y1
 
-    # Image box
-    img_box_w = int(panel_w * 0.42)
-    img_box_h = int(panel_h * 0.28)
-    ix1 = int(px1 + (panel_w - img_box_w) / 2)
-    iy1 = int(py1 + header_h + int(panel_h * 0.42))
-    ix2 = ix1 + img_box_w
-    iy2 = iy1 + img_box_h
+    draw.rounded_rectangle(
+        [img_x1, img_y1, img_x2, img_y2], radius=12,
+        fill=(250, 250, 250), outline=(160, 160, 160), width=2,
+    )
 
-    # Choices text between question and image box
-    options_max_y = iy1 - 10
-    for opt in list(choices)[:4]:
-        if y >= options_max_y:
-            break
-        for ol in _wrap_text(draw, opt, fonts.small, max_width_px=max_w)[:2]:
-            if y >= options_max_y:
-                break
-            draw.text((body_x1, y), ol, font=fonts.small, fill=(40, 40, 40))
-            ob = draw.textbbox((0, 0), ol, font=fonts.small)
-            y += (ob[3] - ob[1]) + 4
-        y += 2
-
-    draw.rectangle([ix1, iy1, ix2, iy2], fill=(250, 250, 250), outline=(120, 120, 120), width=3)
-
-    if image is None:
+    if image is not None:
+        fitted = _fit_into_box(image.convert("RGB"), box_w=img_box_w - 16, box_h=img_box_h - 16)
+        fx, fy = fitted.size
+        ox = img_x1 + (img_box_w - fx) // 2
+        oy = img_y1 + (img_box_h - fy) // 2
+        canvas.paste(fitted, (ox, oy))
+    else:
         ph = "Image"
         pb = draw.textbbox((0, 0), ph, font=fonts.body)
-        draw.text((ix1 + (img_box_w - (pb[2] - pb[0])) / 2, iy1 + (img_box_h - (pb[3] - pb[1])) / 2 - 2), ph, font=fonts.body, fill=(40, 40, 40))
-        return
+        draw.text(
+            (img_x1 + (img_box_w - (pb[2] - pb[0])) / 2,
+             img_y1 + (img_box_h - (pb[3] - pb[1])) / 2),
+            ph, font=fonts.body, fill=(100, 100, 100),
+        )
 
-    fitted = _fit_into_box(image.convert("RGB"), box_w=img_box_w - 8, box_h=img_box_h - 8)
-    fx, fy = fitted.size
-    ox = ix1 + (img_box_w - fx) // 2
-    oy = iy1 + (img_box_h - fy) // 2
-    canvas.paste(fitted, (ox, oy))
+    # Right column — question + choices (45 % of panel width)
+    text_x1 = px1 + img_col_w + pad // 2
+    text_x2 = px2 - pad
+    text_max_w = text_x2 - text_x1
+    y = content_y1
+
+    # Question text
+    for line in _wrap_text(draw, question, fonts.body, max_width_px=text_max_w)[:5]:
+        draw.text((text_x1, y), line, font=fonts.body, fill=(20, 20, 20))
+        bb = draw.textbbox((0, 0), line, font=fonts.body)
+        y += (bb[3] - bb[1]) + 8
+
+    # Separator
+    y += 12
+    draw.line([(text_x1, y), (text_x2, y)], fill=(180, 180, 180), width=2)
+    y += 16
+
+    # Choice options
+    for opt in list(choices)[:4]:
+        if y >= content_y2 - 10:
+            break
+        for ol in _wrap_text(draw, opt, fonts.small, max_width_px=text_max_w)[:2]:
+            if y >= content_y2 - 10:
+                break
+            draw.text((text_x1, y), ol, font=fonts.small, fill=(40, 40, 40))
+            ob = draw.textbbox((0, 0), ol, font=fonts.small)
+            y += (ob[3] - ob[1]) + 6
+        y += 10
 
 
 def render_video_mcp_frame(
@@ -187,12 +268,14 @@ def render_video_mcp_frame(
     image: Image.Image | None,
     show_panel: bool,
     lit_choice: Choice | None,
+    lit_progress: float = 1.0,
+    lit_style: LitStyle = "darken",
     fonts: Fonts,
 ) -> Image.Image:
     canvas = Image.new("RGB", (width, height), (255, 255, 255))
-    # Always show corner choices; highlight depends on frame.
-    draw_corner_choices(canvas, lit_choice=lit_choice, fonts=fonts)
+    # Panel first, then corner choices on top so they're never hidden.
     if show_panel:
         draw_question_panel(canvas, question=question, choices=choices, image=image, fonts=fonts)
+    draw_corner_choices(canvas, lit_choice=lit_choice, lit_progress=lit_progress, lit_style=lit_style, fonts=fonts)
     return canvas
 

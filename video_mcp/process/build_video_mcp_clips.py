@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import io
+import subprocess
 from pathlib import Path
 
 from PIL import Image
 from pydantic import BaseModel
 
 from video_mcp.process.adapter import DatasetAdapter
-from video_mcp.mcqa import CHOICE_ORDER, Choice
+from video_mcp.mcqa import CHOICE_ORDER, Choice, LitStyle
 from video_mcp.render.mcqa_overlay import make_fonts, render_video_mcp_frame
 from video_mcp.video_spec import VideoSpec
 
@@ -29,19 +30,46 @@ class VideoMcpClipConfig(BaseModel):
     height: int
 
 
+def compile_frames_to_mp4(
+    frames_dir: Path,
+    output_path: Path,
+    *,
+    fps: int,
+    width: int,
+    height: int,
+) -> Path:
+    """Compile a directory of numbered PNGs into an MP4 using ffmpeg."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-framerate", str(fps),
+        "-i", str(frames_dir / "frame_%04d.png"),
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-s", f"{width}x{height}",
+        "-loglevel", "error",
+        str(output_path),
+    ]
+    subprocess.run(cmd, check=True)
+    return output_path
+
+
 def build_video_mcp_clips(
     adapter: DatasetAdapter,
     *,
     out_dir: Path,
     video: VideoSpec | None = None,
     limit: int | None = None,
+    lit_style: LitStyle = "darken",
 ) -> int:
     """
     Build Video-MCP clips from **any** adapter.
 
     - 16 FPS, 3 seconds (48 frames) by default
     - frame_0000: MCQA VQA panel shown, no highlight
-    - frame_0001..: only corner boxes; correct choice is lit
+    - frame_0001..: MCQA VQA panel shown, correct choice is lit
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -66,16 +94,17 @@ def build_video_mcp_clips(
             break
 
         n += 1
-        print(f"[{n}{total}] {adapter.name}_{sample.source_id} ({v.num_frames} frames)")
+        sample_id = f"{adapter.name}_{n}"
+        print(f"[{n}{total}] {sample_id} (src: {sample.source_id}, {v.num_frames} frames)")
 
         img_obj = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-        sample_id = f"{adapter.name}_{sample.source_id}"
         sample_dir = out_dir / sample_id
         original_dir = sample_dir / "original"
         frames_dir = sample_dir / "frames"
+        video_dir = sample_dir / "video"
         original_dir.mkdir(parents=True, exist_ok=True)
         frames_dir.mkdir(parents=True, exist_ok=True)
+        video_dir.mkdir(parents=True, exist_ok=True)
 
         # Save original image
         (original_dir / sample.image_filename).write_bytes(image_bytes)
@@ -95,21 +124,36 @@ def build_video_mcp_clips(
         choices_display = [f"{k}: {sample.choices[k]}" for k in CHOICE_ORDER if k in sample.choices]
 
         for frame_idx in range(v.num_frames):
-            show_panel = frame_idx == 0
             lit: Choice | None = None
+            progress = 0.0
             if frame_idx >= 1:
                 lit = sample.answer  # correct answer
+                # Spread the fade-in across the entire clip (frames 1 → last).
+                progress = frame_idx / (v.num_frames - 1)
 
             frame = render_video_mcp_frame(
                 width=int(v.width),
                 height=int(v.height),
                 question=sample.question,
                 choices=choices_display,
-                image=img_obj if show_panel else None,
-                show_panel=show_panel,
+                image=img_obj,
+                show_panel=True,
                 lit_choice=lit,
+                lit_progress=progress,
+                lit_style=lit_style,
                 fonts=fonts,
             )
             frame.save(frames_dir / f"frame_{frame_idx:04d}.png", format="PNG")
+
+        # Compile frames into MP4 video
+        mp4_path = video_dir / "clip.mp4"
+        compile_frames_to_mp4(
+            frames_dir,
+            mp4_path,
+            fps=int(v.fps),
+            width=int(v.width),
+            height=int(v.height),
+        )
+        print(f"  -> {mp4_path}")
 
     return n

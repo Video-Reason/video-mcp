@@ -207,6 +207,7 @@ data/
 # Local caches / secrets
 hf_home/
 .hf_home/
+.hf_cache/
 
 # Marimo
 marimo/_static/

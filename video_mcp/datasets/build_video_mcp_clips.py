@@ -11,28 +11,26 @@ from video_mcp.render.mcqa_overlay import Choice, make_fonts, render_video_mcp_f
 from video_mcp.video_spec import VideoSpec
 
 
-class VideoMcpClipRecord(BaseModel):
+class VideoMcpOriginalQuestion(BaseModel):
     dataset: str
-    split: str
     source_id: str
+    question: str
+    choices: dict[str, str]
+    answer: Choice
+    original_image_filename: str
 
+
+class VideoMcpClipConfig(BaseModel):
     fps: int
     seconds: float
     num_frames: int
     width: int
     height: int
 
-    question: str
-    choices: dict[str, str]
-    answer: Choice
-
-    frames_dir: str
-
 
 def build_video_mcp_clips_corecognition_mcqa_single_image(
     *,
     out_dir: Path,
-    split: str = "train",
     video: VideoSpec | None = None,
     limit: int | None = None,
 ) -> int:
@@ -43,9 +41,7 @@ def build_video_mcp_clips_corecognition_mcqa_single_image(
     - frame_0001..: only corner boxes; correct choice is lit
     """
     out_dir = Path(out_dir)
-    split_dir = out_dir / split
-    split_dir.mkdir(parents=True, exist_ok=True)
-    meta_path = split_dir / "metadata.jsonl"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     v = video or VideoSpec()
     fonts = make_fonts()
@@ -57,59 +53,70 @@ def build_video_mcp_clips_corecognition_mcqa_single_image(
     available = set(z.namelist())
 
     n = 0
-    with meta_path.open("w", encoding="utf-8") as f:
-        for ex in iter_corecognition_mcqa_single_image(split=split, config="complete"):
-            if limit is not None and n >= int(limit):
-                break
+    # Dataset-level config (written once)
+    cfg = VideoMcpClipConfig(
+        fps=int(v.fps),
+        seconds=float(v.seconds),
+        num_frames=int(v.num_frames),
+        width=int(v.width),
+        height=int(v.height),
+    )
+    (out_dir / "clip_config.json").write_text(cfg.model_dump_json(), encoding="utf-8")
 
-            # Load the referenced image from the ZIP.
-            img_obj = None
-            if ex.media_path in available:
-                img_bytes = z.read(ex.media_path)
-                img_obj = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    for ex in iter_corecognition_mcqa_single_image(split="train", config="complete"):
+        if limit is not None and n >= int(limit):
+            break
 
-            # Per-sample frame directory
-            sample_id = f"corecognition_{ex.id}"
-            frames_dir = split_dir / sample_id / "frames"
-            frames_dir.mkdir(parents=True, exist_ok=True)
+        if ex.media_path not in available:
+            continue
 
-            # Build choices list in A/B/C/D order for display.
-            choices_display = [f"{k}: {ex.choices[k]}" for k in ["A", "B", "C", "D"] if k in ex.choices]
+        img_bytes = z.read(ex.media_path)
+        img_obj = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
-            for frame_idx in range(v.num_frames):
-                show_panel = frame_idx == 0
-                lit: Choice | None = None
-                if frame_idx >= 1:
-                    lit = ex.answer  # correct answer
+        sample_id = f"corecognition_{ex.id}"
+        sample_dir = out_dir / sample_id
+        original_dir = sample_dir / "original"
+        frames_dir = sample_dir / "frames"
+        original_dir.mkdir(parents=True, exist_ok=True)
+        frames_dir.mkdir(parents=True, exist_ok=True)
 
-                frame = render_video_mcp_frame(
-                    width=int(v.width),
-                    height=int(v.height),
-                    question=ex.question,
-                    choices=choices_display,
-                    image=img_obj if show_panel else None,
-                    show_panel=show_panel,
-                    lit_choice=lit,
-                    fonts=fonts,
-                )
-                frame.save(frames_dir / f"frame_{frame_idx:04d}.png", format="PNG")
+        # Save original image
+        original_image_name = Path(ex.image).name
+        (original_dir / original_image_name).write_bytes(img_bytes)
 
-            rec = VideoMcpClipRecord(
-                dataset="CoreCognition",
-                split=split,
-                source_id=str(ex.id),
-                fps=int(v.fps),
-                seconds=float(v.seconds),
-                num_frames=int(v.num_frames),
+        # Save original question.json
+        q = VideoMcpOriginalQuestion(
+            dataset="CoreCognition",
+            source_id=str(ex.id),
+            question=ex.question,
+            choices=ex.choices,
+            answer=ex.answer,
+            original_image_filename=original_image_name,
+        )
+        (original_dir / "question.json").write_text(q.model_dump_json(), encoding="utf-8")
+
+        # Build choices list in A/B/C/D order for display.
+        choices_display = [f"{k}: {ex.choices[k]}" for k in ["A", "B", "C", "D"] if k in ex.choices]
+
+        for frame_idx in range(v.num_frames):
+            show_panel = frame_idx == 0
+            lit: Choice | None = None
+            if frame_idx >= 1:
+                lit = ex.answer  # correct answer
+
+            frame = render_video_mcp_frame(
                 width=int(v.width),
                 height=int(v.height),
                 question=ex.question,
-                choices=ex.choices,
-                answer=ex.answer,
-                frames_dir=str(frames_dir.relative_to(split_dir)),
+                choices=choices_display,
+                image=img_obj if show_panel else None,
+                show_panel=show_panel,
+                lit_choice=lit,
+                fonts=fonts,
             )
-            f.write(rec.model_dump_json() + "\n")
-            n += 1
+            frame.save(frames_dir / f"frame_{frame_idx:04d}.png", format="PNG")
+
+        n += 1
 
     z.close()
     return n

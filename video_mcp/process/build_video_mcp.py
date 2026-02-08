@@ -32,6 +32,9 @@ def build_video_mcp(
     n = 0
     with metadata_path.open("w", encoding="utf-8") as f:
         for sample, image_bytes in adapter.iter_mcqa_vqa(split=split):
+            n += 1
+            print(f"[{n}] {adapter.name}_{sample.source_id}")
+
             out_name = f"{sample.source_id}__{sample.image_filename}"
             out_file = images_dir / out_name
             if not out_file.exists():

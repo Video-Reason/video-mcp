@@ -60,10 +60,14 @@ def build_video_mcp_clips(
     )
     (out_dir / "clip_config.json").write_text(cfg.model_dump_json(), encoding="utf-8")
 
+    total = f"/{limit}" if limit is not None else ""
     n = 0
     for sample, image_bytes in adapter.iter_mcqa_vqa(split=split):
         if limit is not None and n >= int(limit):
             break
+
+        n += 1
+        print(f"[{n}{total}] {adapter.name}_{sample.source_id} ({v.num_frames} frames)")
 
         img_obj = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
@@ -108,7 +112,5 @@ def build_video_mcp_clips(
                 fonts=fonts,
             )
             frame.save(frames_dir / f"frame_{frame_idx:04d}.png", format="PNG")
-
-        n += 1
 
     return n

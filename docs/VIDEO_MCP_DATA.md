@@ -91,3 +91,8 @@ Notes:
 - `download` places raw artifacts under `data/raw/...` (symlinked by default to avoid duplicating large files).
 - `process` generates the **Video-MCP clip frames** under `data/processed/...`.
 
+### CoreCognition specifics
+
+- Current supported subset: **single-image MCQA VQA** from CoreCognition (753 samples).
+- Source raw artifact: `CoreCognition_20250622.zip` (stored under `data/raw/corecognition/` as a symlink to the local HF cache).
+

@@ -11,8 +11,9 @@ This file is the running ledger of datasets that have been downloaded into `data
 
 | Dataset | Subset / task | Raw artifact(s) | Processed output | Status | Command(s) |
 |---|---|---|---|---|---|
-| CoreCognition | single-image MCQA VQA (753 samples) | `data/raw/corecognition/CoreCognition_20250622.zip` | `data/processed/corecognition_video_mcp/` | supported | `python -m video_mcp.dataset download --dataset corecognition`<br>`python -m video_mcp.dataset process --dataset corecognition --config complete` |
+| CoreCognition | single-image MCQA VQA (753 samples) | `data/raw/corecognition/CoreCognition_20250622.zip` | `data/processed/corecognition_video_mcp/` | supported | `python -m video_mcp.dataset download --dataset corecognition`<br>`python -m video_mcp.dataset process --dataset corecognition` |
 
 ## Notes
 
 - Some datasets require `HF_TOKEN` (gated access).
+- See the [README](../README.md#adding-a-new-dataset) for how to add a new dataset adapter.

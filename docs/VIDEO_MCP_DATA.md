@@ -80,21 +80,27 @@ Each sample’s `original/question.json` contains (at minimum):
 
 ### CLI (how we build datasets)
 
-Canonical usage is via:
+Every registered dataset adapter is available through the same commands:
 
 ```bash
-python -m video_mcp.dataset download --dataset corecognition
-python -m video_mcp.dataset process --dataset corecognition
+python -m video_mcp.dataset download --dataset <name>
+python -m video_mcp.dataset process  --dataset <name>
 ```
 
 Notes:
-- `download` places raw artifacts under `data/raw/...` (downloaded directly; no HF-cache symlinks).
-- `process` generates the **Video-MCP clip frames** under `data/processed/...`.
+- `download` places raw artifacts under `data/raw/<name>/` (downloaded directly; no HF-cache symlinks).
+- `process` generates the **Video-MCP clip frames** under `data/processed/<name>_video_mcp/`.
   - `process` supports `--limit N` for quick local testing.
-  - `process` currently requires `--config complete` (real images come from the gated ZIP).
+
+### Adding a new dataset
+
+See the [README](../README.md#adding-a-new-dataset) for a step-by-step guide.
+In short: create one file in `video_mcp/datasets/`, implement the `DatasetAdapter`
+interface, and register it — the CLI and all build scripts pick it up automatically.
 
 ### CoreCognition specifics
 
 - Current supported subset: **single-image MCQA VQA** from CoreCognition (753 samples).
 - Source raw artifact: `CoreCognition_20250622.zip` (stored under `data/raw/corecognition/`).
+- The adapter always uses the **complete** ZIP (real images required for rendering).
 

@@ -32,8 +32,23 @@ def _pick_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
-def make_fonts() -> Fonts:
-    return Fonts(title=_pick_font(44), body=_pick_font(30), small=_pick_font(26))
+_REF_MIN_DIM = 768  # reference min(w,h) for the original 1024×768 layout
+_REF_TITLE = 44
+_REF_BODY = 30
+_REF_SMALL = 26
+
+
+def make_fonts(*, width: int = 832, height: int = 480) -> Fonts:
+    """Create fonts scaled proportionally to the canvas resolution.
+
+    The reference sizes (44/30/26 pt) were designed for 1024×768.
+    """
+    scale = min(width, height) / _REF_MIN_DIM
+    return Fonts(
+        title=_pick_font(max(16, int(round(_REF_TITLE * scale)))),
+        body=_pick_font(max(12, int(round(_REF_BODY * scale)))),
+        small=_pick_font(max(10, int(round(_REF_SMALL * scale)))),
+    )
 
 
 def _wrap_text(

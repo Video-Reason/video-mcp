@@ -67,7 +67,8 @@ def build_video_mcp_clips(
     """
     Build Video-MCP clips from **any** adapter.
 
-    - 16 FPS, 3 seconds (48 frames) by default
+    Wan2.2-I2V-A14B defaults: 480p (832×480), 16 FPS, 81 frames (~5 s).
+
     - frame_0000: MCQA VQA panel shown, no highlight
     - frame_0001..: MCQA VQA panel shown, correct choice is lit
     """
@@ -75,7 +76,7 @@ def build_video_mcp_clips(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     v = video or VideoSpec()
-    fonts = make_fonts()
+    fonts = make_fonts(width=int(v.width), height=int(v.height))
 
     # Dataset-level config (written once)
     cfg = VideoMcpClipConfig(

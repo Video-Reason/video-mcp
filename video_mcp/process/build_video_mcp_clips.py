@@ -6,8 +6,9 @@ from pathlib import Path
 from PIL import Image
 from pydantic import BaseModel
 
-from video_mcp.datasets.corecognition import download_corecognition_complete_zip, iter_corecognition_mcqa_single_image
-from video_mcp.render.mcqa_overlay import Choice, make_fonts, render_video_mcp_frame
+from video_mcp.process.adapter import DatasetAdapter
+from video_mcp.mcqa import CHOICE_ORDER, Choice
+from video_mcp.render.mcqa_overlay import make_fonts, render_video_mcp_frame
 from video_mcp.video_spec import VideoSpec
 
 
@@ -28,14 +29,17 @@ class VideoMcpClipConfig(BaseModel):
     height: int
 
 
-def build_video_mcp_clips_corecognition_mcqa_single_image(
+def build_video_mcp_clips(
+    adapter: DatasetAdapter,
     *,
     out_dir: Path,
+    split: str = "train",
     video: VideoSpec | None = None,
     limit: int | None = None,
 ) -> int:
     """
-    Build Video-MCP clips:
+    Build Video-MCP clips from **any** adapter.
+
     - 16 FPS, 3 seconds (48 frames) by default
     - frame_0000: MCQA VQA panel shown, no highlight
     - frame_0001..: only corner boxes; correct choice is lit
@@ -46,13 +50,6 @@ def build_video_mcp_clips_corecognition_mcqa_single_image(
     v = video or VideoSpec()
     fonts = make_fonts()
 
-    zip_path = download_corecognition_complete_zip()
-    import zipfile
-
-    z = zipfile.ZipFile(zip_path)
-    available = set(z.namelist())
-
-    n = 0
     # Dataset-level config (written once)
     cfg = VideoMcpClipConfig(
         fps=int(v.fps),
@@ -63,17 +60,14 @@ def build_video_mcp_clips_corecognition_mcqa_single_image(
     )
     (out_dir / "clip_config.json").write_text(cfg.model_dump_json(), encoding="utf-8")
 
-    for ex in iter_corecognition_mcqa_single_image(split="train", config="complete"):
+    n = 0
+    for sample, image_bytes in adapter.iter_mcqa_vqa(split=split):
         if limit is not None and n >= int(limit):
             break
 
-        if ex.media_path not in available:
-            continue
+        img_obj = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-        img_bytes = z.read(ex.media_path)
-        img_obj = Image.open(io.BytesIO(img_bytes)).convert("RGB")
-
-        sample_id = f"corecognition_{ex.id}"
+        sample_id = f"{adapter.name}_{sample.source_id}"
         sample_dir = out_dir / sample_id
         original_dir = sample_dir / "original"
         frames_dir = sample_dir / "frames"
@@ -81,33 +75,32 @@ def build_video_mcp_clips_corecognition_mcqa_single_image(
         frames_dir.mkdir(parents=True, exist_ok=True)
 
         # Save original image
-        original_image_name = Path(ex.image).name
-        (original_dir / original_image_name).write_bytes(img_bytes)
+        (original_dir / sample.image_filename).write_bytes(image_bytes)
 
         # Save original question.json
         q = VideoMcpOriginalQuestion(
-            dataset="CoreCognition",
-            source_id=str(ex.id),
-            question=ex.question,
-            choices=ex.choices,
-            answer=ex.answer,
-            original_image_filename=original_image_name,
+            dataset=sample.dataset,
+            source_id=sample.source_id,
+            question=sample.question,
+            choices=sample.choices,
+            answer=sample.answer,
+            original_image_filename=sample.image_filename,
         )
         (original_dir / "question.json").write_text(q.model_dump_json(), encoding="utf-8")
 
         # Build choices list in A/B/C/D order for display.
-        choices_display = [f"{k}: {ex.choices[k]}" for k in ["A", "B", "C", "D"] if k in ex.choices]
+        choices_display = [f"{k}: {sample.choices[k]}" for k in CHOICE_ORDER if k in sample.choices]
 
         for frame_idx in range(v.num_frames):
             show_panel = frame_idx == 0
             lit: Choice | None = None
             if frame_idx >= 1:
-                lit = ex.answer  # correct answer
+                lit = sample.answer  # correct answer
 
             frame = render_video_mcp_frame(
                 width=int(v.width),
                 height=int(v.height),
-                question=ex.question,
+                question=sample.question,
                 choices=choices_display,
                 image=img_obj if show_panel else None,
                 show_panel=show_panel,
@@ -118,6 +111,4 @@ def build_video_mcp_clips_corecognition_mcqa_single_image(
 
         n += 1
 
-    z.close()
     return n
-

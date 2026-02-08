@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Iterable, Literal
+from typing import Iterable
 
 from PIL import Image, ImageDraw, ImageFont
 
-Choice = Literal["A", "B", "C", "D"]
+from video_mcp.mcqa import Choice
 
 
 @dataclass(frozen=True)

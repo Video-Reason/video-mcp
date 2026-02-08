@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from video_mcp.mcqa import Choice
+
 
 class VideoMcpSample(BaseModel):
     """
@@ -17,8 +19,7 @@ class VideoMcpSample(BaseModel):
     task: Literal["mcqa_vqa"] = "mcqa_vqa"
     question: str
     choices: dict[str, str]
-    answer: str
+    answer: Choice
 
     # Local asset paths (relative to the dataset root)
     image_path: str = Field(description="Relative path to the image file.")
-

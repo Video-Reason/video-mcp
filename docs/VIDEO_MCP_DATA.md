@@ -90,6 +90,8 @@ python -m video_mcp.dataset process --dataset corecognition
 Notes:
 - `download` places raw artifacts under `data/raw/...` (downloaded directly; no HF-cache symlinks).
 - `process` generates the **Video-MCP clip frames** under `data/processed/...`.
+  - `process` supports `--limit N` for quick local testing.
+  - `process` currently requires `--config complete` (real images come from the gated ZIP).
 
 ### CoreCognition specifics
 

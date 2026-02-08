@@ -5,9 +5,12 @@ import io
 import re
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from pydantic import BaseModel, Field
+
+from video_mcp.process.adapter import DatasetAdapter, McqaVqaSample, register_adapter
+from video_mcp.mcqa import CHOICE_ORDER, Choice, normalize_choice
 
 
 class CoreCognitionRawRow(BaseModel):
@@ -32,7 +35,7 @@ class CoreCognitionMcqaVqaExample(BaseModel):
     media_path: str = Field(description="Path inside CoreCognition ZIP, e.g. CoreCognition_20250622/media/a0052.png")
     question: str
     choices: dict[str, str]
-    answer: str
+    answer: Choice
 
 
 _IMAGE_PLACEHOLDER_RE = re.compile(r"^<image-placeholder:\s*([^>]+)>\s*", flags=re.IGNORECASE)
@@ -217,6 +220,14 @@ def iter_corecognition_mcqa_single_image(*, split: str = "train", config: str = 
         if not choices:
             continue
 
+        ans = normalize_choice(raw.answer)
+        if ans is None:
+            continue
+        if ans not in CHOICE_ORDER:
+            continue
+        if ans not in choices:
+            continue
+
         yield CoreCognitionMcqaVqaExample(
             id=str(raw.id),
             concept=raw.concept,
@@ -226,7 +237,7 @@ def iter_corecognition_mcqa_single_image(*, split: str = "train", config: str = 
             media_path=f"CoreCognition_20250622/media/{image}",
             question=question_text,
             choices=choices,
-            answer=str(raw.answer).strip(),
+            answer=ans,
         )
 
 
@@ -267,4 +278,43 @@ def extract_corecognition_mcqa_single_image(
             if out_file.exists():
                 continue
             out_file.write_bytes(z.read(mp))
+
+
+# ---------------------------------------------------------------------------
+# Adapter (generic interface consumed by the build scripts and CLI)
+# ---------------------------------------------------------------------------
+
+
+@register_adapter("corecognition")
+class CoreCognitionAdapter(DatasetAdapter):
+    """
+    Adapter for the *CoreCognition* dataset (``williamium/CoreCognition``).
+
+    Uses the **complete** ZIP so that real images are available for rendering.
+    """
+
+    @property
+    def name(self) -> str:
+        return "corecognition"
+
+    def download(self, *, out_dir: Path) -> Path:
+        return download_corecognition_complete_zip(out_dir=out_dir)
+
+    def iter_mcqa_vqa(self, *, split: str) -> Iterator[tuple[McqaVqaSample, bytes]]:
+        zip_path = download_corecognition_complete_zip()
+        with zipfile.ZipFile(zip_path) as z:
+            available = set(z.namelist())
+            for ex in iter_corecognition_mcqa_single_image(split=split, config="complete"):
+                if ex.media_path not in available:
+                    continue
+                image_bytes = z.read(ex.media_path)
+                sample = McqaVqaSample(
+                    dataset="CoreCognition",
+                    source_id=str(ex.id),
+                    question=ex.question,
+                    choices=ex.choices,
+                    answer=ex.answer,
+                    image_filename=Path(ex.image).name,
+                )
+                yield sample, image_bytes
 

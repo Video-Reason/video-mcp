@@ -182,10 +182,22 @@ with A/B/C/D answer boxes in the four corners of the frame.
 
 ## S3 upload
 
-Processed datasets are synced to S3 for sharing:
+Processed datasets are synced to S3 for sharing. First, ensure your `.env` file contains:
 
 ```bash
+AWS_ACCESS_KEY_ID="..."
+AWS_SECRET_ACCESS_KEY="..."
+AWS_DEFAULT_REGION="us-east-2"
+```
+
+Then load the credentials and sync:
+
+```bash
+# Load AWS credentials from .env
+source scripts/load_env.sh
+
+# Sync to S3
 aws s3 sync data/processed/ s3://video-mcp/data/processed/ --delete
 ```
 
-Requires AWS credentials configured via `aws configure` or environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
+**Alternative:** Set credentials permanently via `aws configure`, which creates `~/.aws/credentials`.

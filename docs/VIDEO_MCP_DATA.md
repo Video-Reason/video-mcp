@@ -1,93 +1,103 @@
 ## Video-MCP dataset: what "correct" means
 
-This project defines **Video-MCP data** as **short video clips** that encode a multiple-choice VQA interaction in the video itself.
+This project defines **Video-MCP data** as **short video clips** that encode a
+multiple-choice VQA interaction in the video itself.
 
 The core idea is:
 - The model first **sees a prompt UI** (question + choices + image).
-- Then the model must **answer by "lighting up"** the correct option (**A/B/C/D**) in the video frames.
+- Then the model must **answer by "lighting up"** the correct option (**A/B/C/D**)
+  across later frames.
 
-### Clip spec (default)
+## Clip spec (default, Wan2.2-I2V-A14B aligned)
 
 - **FPS**: 16
-- **Duration**: 3 seconds
-- **Frames per clip**: 48 (`frame_0000.png` … `frame_0047.png`)
-- **Resolution**: 1024×768 (configurable)
-- **Output video**: `clip.mp4` (H.264, compiled from frames via ffmpeg)
+- **Frames per clip**: 81
+- **Duration**: 81 / 16 = **5.0625 seconds**
+- **Resolution**: 832×480 (480p tier)
+- **Output video**: H.264 MP4 (`ground_truth.mp4`) compiled via `ffmpeg`
 
-### Frame layout
+## Frame layout
 
-Each frame uses a **two-column panel** centred between the A/B/C/D corner boxes:
+Each frame uses a **two-column panel** centered between the A/B/C/D corner boxes:
 
-- **Left column (~55%)**: the source image, scaled to fill the available area.
-- **Right column (~45%)**: question text at the top, a separator, then the four choice options.
-- **Corners**: A (top-left), B (top-right), C (bottom-left), D (bottom-right) answer boxes.
+- **Left column**: the source image, scaled to fill the available area.
+- **Right column**: question text at the top, then the four choice options.
+- **Corners**: A (top-left), B (top-right), C (bottom-left), D (bottom-right).
 
-### Frame semantics
+## Frame semantics
 
 For each clip:
 
-- **Frame 0 (`frame_0000.png`)**:
-  - Shows the full question panel (image + question + choices) and the four corner answer boxes.
+- **Frame 0**:
+  - Shows the full question panel (image + question + choices) and the four corner boxes.
   - **No highlight** on frame 0 (the model is "reading").
 
-- **Frames 1–47 (`frame_0001.png` … `frame_0047.png`)**:
-  - Question panel remains visible.
-  - The correct answer's corner box **gradually highlights** across the full clip duration (linear fade-in from frame 1 to frame 47).
+- **Frames 1..(N-1)**:
+  - Panel remains visible.
+  - The correct corner box **gradually highlights** across the clip duration.
 
-### Highlight styles (`--lit-style`)
+## Highlight styles (`--lit-style`)
 
 | Style | Effect |
 |---|---|
-| `darken` (default) | Correct corner box gradually darkens; letter stays dark |
+| `darken` (default) | Correct corner box gradually darkens |
 | `red_border` | Thick red outline gradually appears around the correct corner box |
 
-### Sample ID format
+## Output layout (VBVR DataFactory)
 
-Each sample folder is named `<datasetname>_<n>` where `<n>` is a sequential integer starting from 1 (e.g. `corecognition_1`, `corecognition_2`, …). The original source dataset ID is preserved inside `original/question.json` for traceability.
-
-### Folder layout (canonical)
-
-All dataset generation is organized under:
-
-- `data/raw/`: raw downloads (zips, original files)
-- `data/processed/`: processed Video-MCP-ready outputs
-
-For a processed Video-MCP dataset, the layout is:
+Processing uses a VBVR-compatible layout rooted at `questions/` by default:
 
 ```
-data/processed/<datasetname>_video_mcp/
-  clip_config.json
-  <datasetname>_1/
-    original/
-      question.json
-      <original_image_file>
-    frames/
-      frame_0000.png
-      frame_0001.png
-      ...
-      frame_0047.png
-    video/
-      clip.mp4
-  <datasetname>_2/
-    ...
+questions/
+  {generator_id}_{dataset}_data-generator/
+    clip_config.json
+    run_manifest.json
+    run_manifests/
+      <UTC_RUN_ID>.json
+    {dataset}_task/
+      {dataset}_0000/
+        first_frame.png
+        prompt.txt
+        final_frame.png
+        ground_truth.mp4
+        original/
+          question.json
+          <original_image_file>
 ```
+
+Naming rules:
+
+- Sample indices are **zero-based** and **4-digit zero-padded**: `..._0000`, `..._0049`, ...
+- `first_frame.png`/`final_frame.png` are always PNG; the original source image is preserved
+  with its original filename/extension (commonly `.png`, `.jpg`, `.jpeg`).
+- Intermediate per-frame PNGs are rendered in a temporary directory and are not kept.
 
 ### `original/question.json` schema (per sample)
 
 Each sample's `original/question.json` contains (at minimum):
 
-- **dataset**: source dataset name (e.g. `CoreCognition`)
-- **source_id**: original dataset id (for traceability)
-- **question**: question string
-- **choices**: dict mapping `A/B/C/D` to choice text
-- **answer**: one of `A/B/C/D`
-- **original_image_filename**: the filename of the original image saved beside `question.json`
+- `dataset`: source dataset name (e.g. `ScienceQA`, `CoreCognition`)
+- `source_id`: original dataset id (traceability)
+- `question`: question string
+- `choices`: dict mapping `A/B/C/D` to choice text
+- `answer`: one of `A/B/C/D`
+- `original_image_filename`: filename of the preserved original image
 
 ### `clip_config.json` schema (dataset-level)
 
-- **fps**, **seconds**, **num_frames**, **width**, **height**
+- `fps`, `seconds`, `num_frames`, `width`, `height`
 
-### CLI (how we build datasets)
+### Run manifest
+
+Each `process` run writes:
+
+- `{generator}/run_manifest.json` (latest)
+- `{generator}/run_manifests/<UTC_RUN_ID>.json` (history)
+
+It records dataset identity (including HF fields when available), processing parameters,
+code version (git commit/branch when available), and runtime info.
+
+## CLI (how we build datasets)
 
 Every registered dataset adapter is available through the same commands:
 
@@ -99,17 +109,12 @@ python -m video_mcp.dataset process  --dataset <name>
 Options for `process`:
 - `--limit N` — build only the first N samples (useful for quick testing).
 - `--lit-style darken|red_border` — choose the highlight style (default: `darken`).
+- `--width/--height/--num-frames` — override the default video spec (validated).
 
 Requires `ffmpeg` on the system PATH.
 
-### Adding a new dataset
+## Adding a new dataset
 
 See the [README](../README.md#adding-a-new-dataset) for a step-by-step guide.
 In short: create one file in `video_mcp/datasets/`, implement the `DatasetAdapter`
-interface, and register it — the CLI and all build scripts pick it up automatically.
-
-### CoreCognition specifics
-
-- Current supported subset: **single-image MCQA VQA** from CoreCognition (753 samples).
-- Source raw artifact: `CoreCognition_20250622.zip` (stored under `data/raw/corecognition/`).
-- The adapter always uses the **complete** ZIP (real images required for rendering).
+interface, and register it.

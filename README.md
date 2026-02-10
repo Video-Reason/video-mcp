@@ -3,7 +3,7 @@ Model Context Protocol (MCP)-style **Video-MCQA** dataset utilities.
 
 This repo’s main output is a **Video-MCP dataset**: short clips where the **prompt UI is part of the video** and the **answer is expressed by highlighting A/B/C/D** in later frames.
 
-For the authoritative spec, see `docs/VIDEO_MCP_DATA.md`.
+For the authoritative spec, see `docs/VIDEO_MCP_DATA.md` (kept in sync with code).
 
 ## Quickstart
 
@@ -31,11 +31,18 @@ HF_TOKEN=...
 source venv/bin/activate
 ```
 
-Download raw data and build processed Video-MCP outputs:
+Download raw data (default: `data/raw/`) and build Video-MCP outputs (default: `questions/`):
 
 ```bash
 python -m video_mcp.dataset download --dataset corecognition
 python -m video_mcp.dataset process  --dataset corecognition
+```
+
+Quick test run (50 samples):
+
+```bash
+python -m video_mcp.dataset download --dataset scienceqa
+python -m video_mcp.dataset process  --dataset scienceqa --limit 50
 ```
 
 ### Video specifications (Wan2.2-I2V-A14B)
@@ -43,7 +50,7 @@ python -m video_mcp.dataset process  --dataset corecognition
 Default output specs are aligned with **Wan2.2-I2V-A14B** fine-tuning requirements:
 
 - **Resolution**: 832×480 (480p tier)
-- **Frames**: 81 @ 16 FPS (~5 seconds)
+- **Frames**: 81 @ 16 FPS (~5.06 seconds)
 - **Codec**: H.264, yuv420p, MP4 container
 
 Override with CLI flags:
@@ -138,34 +145,67 @@ python -m video_mcp.dataset process   --dataset scienceqa
 
 ## Output format
 
-All outputs live under `data/` (gitignored):
-- **Raw downloads**: `data/raw/`
-- **Processed Video-MCP dataset**: `data/processed/`
+This project writes two kinds of outputs:
 
-CoreCognition processed output root:
-- `data/processed/corecognition_video_mcp/`
+- **Raw downloads** (gitignored): `data/raw/<dataset>/...`
+- **Processed Video-MCP clips** (gitignored, default): `questions/`
 
-Dataset-level config:
-- `data/processed/corecognition_video_mcp/clip_config.json`
+### Naming rules (must match code output)
 
-Each sample (ID format: `<datasetname>_<n>`):
+Processing uses the **VBVR DataFactory** layout and naming conventions:
+
+- Generator directory: `{generator_id}_{dataset}_data-generator/`
+  - Example: `M-2_scienceqa_data-generator/`
+- Task directory: `{dataset}_task/`
+  - Example: `scienceqa_task/`
+- Sample directory: `{dataset}_{NNNN}/` where `NNNN` is a **zero-based**, 4-digit, zero-padded index
+  - Example: `scienceqa_0000/`, `scienceqa_0049/`
+
+### Folder layout (per sample)
 
 ```
-data/processed/corecognition_video_mcp/
+questions/
+  M-2_scienceqa_data-generator/
   clip_config.json
-  corecognition_1/
-    original/
-      question.json              # question, choices, answer, source metadata
-      <original_image_file>
-    frames/
-      frame_0000.png … frame_0080.png   # 81 rendered PNG frames (default)
-    video/
-      clip.mp4                   # compiled MP4 video (H.264, yuv420p, 832×480)
-  corecognition_2/
-    ...
+  run_manifest.json
+  run_manifests/
+    20260210T192842Z.json
+  scienceqa_task/
+    scienceqa_0000/
+      first_frame.png            # required: input image for i2v generation
+      prompt.txt                 # required: question + choices + answer text
+      final_frame.png            # optional: expected final frame for evaluation
+      ground_truth.mp4           # optional: reference video for evaluation
+      original/
+        question.json            # structured question/choices/answer + provenance
+        <original_image_file>    # preserved original (PNG/JPG/JPEG)
 ```
 
-### Frame layout
+Notes:
+
+- `first_frame.png` / `final_frame.png` are always written as PNG.
+- The original image is preserved with its original filename/extension (commonly `.png`, `.jpg`, `.jpeg`).
+- Intermediate per-frame PNGs (`frame_0000.png`...) are rendered in a temp directory and are not kept.
+
+### `clip_config.json`
+
+Written once per generator directory:
+
+- `fps`, `seconds`, `num_frames`, `width`, `height`
+
+### Run manifest (`run_manifest.json`)
+
+Every `process` run writes:
+
+- `questions/<generator>/run_manifest.json` (latest)
+- `questions/<generator>/run_manifests/<UTC_RUN_ID>.json` (history)
+
+It records:
+
+- dataset identity (`hf_repo_id`, `hf_config`, `hf_split`, `hf_revision` when provided by the adapter)
+- processing parameters (fps/seconds/num_frames/width/height, lit style, limit)
+- code version (git commit/branch when available)
+- runtime (`python_version`, `ffmpeg_version`)
 
 Each frame uses a **two-column panel** (image on left, question + choices on right)
 with A/B/C/D answer boxes in the four corners of the frame.
@@ -182,7 +222,10 @@ with A/B/C/D answer boxes in the four corners of the frame.
 
 ## S3 upload
 
-Processed datasets are synced to S3 for sharing. First, ensure your `.env` file contains:
+Processed outputs can be synced to S3 for sharing. Prefer attaching an **IAM role**
+to your EC2 instance instead of copying access keys.
+
+If you do use local credentials, ensure your `.env` contains:
 
 ```bash
 AWS_ACCESS_KEY_ID="..."
@@ -197,7 +240,7 @@ Then load the credentials and sync:
 source scripts/load_env.sh
 
 # Sync to S3
-aws s3 sync data/processed/ s3://video-mcp/data/processed/ --delete
+aws s3 sync questions/ s3://video-mcp/questions/ --delete
 ```
 
 **Alternative:** Set credentials permanently via `aws configure`, which creates `~/.aws/credentials`.

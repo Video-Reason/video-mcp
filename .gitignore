@@ -203,11 +203,16 @@ cython_debug/
 
 # Generated datasets / artifacts
 data/
+questions/
+ec2_outputs/
 
 # Local caches / secrets
 hf_home/
 .hf_home/
 .hf_cache/
+
+# macOS Finder
+.DS_Store
 
 # Marimo
 marimo/_static/

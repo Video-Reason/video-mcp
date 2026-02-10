@@ -25,9 +25,9 @@ def main(argv: list[str] | None = None) -> None:
     dl.add_argument("--dataset", type=str, required=True, choices=available)
     dl.add_argument("--out-dir", type=Path, default=Path("data/raw"))
 
-    proc = sub.add_parser("process", help="Process raw datasets into data/processed/...")
+    proc = sub.add_parser("process", help="Process raw datasets into questions/...")
     proc.add_argument("--dataset", type=str, required=True, choices=available)
-    proc.add_argument("--out-dir", type=Path, default=Path("data/processed"))
+    proc.add_argument("--out-dir", type=Path, default=Path("questions"))
     proc.add_argument("--limit", type=int, default=None)
     proc.add_argument(
         "--lit-style",
@@ -75,7 +75,9 @@ def main(argv: list[str] | None = None) -> None:
             spec_kw["num_frames"] = args.num_frames
         video_spec = VideoSpec(**spec_kw)
 
-        out_root = Path(args.out_dir) / f"{args.dataset}_video_mcp"
+        # out_dir is the VBVR root (e.g. questions/); the builder creates
+        # {adapter}_data-generator/{task}_task/{task}_{NNNN}/ inside it.
+        out_root = Path(args.out_dir)
         n = build_video_mcp_clips(
             adapter,
             out_dir=out_root,
@@ -83,8 +85,9 @@ def main(argv: list[str] | None = None) -> None:
             lit_style=lit_style,
             video=video_spec,
         )
+        generator_dir = out_root / adapter.generator_name
         print(
-            f"Wrote {n} Video-MCP samples to {out_root} "
+            f"Wrote {n} VBVR-format samples to {generator_dir} "
             f"({video_spec.width}x{video_spec.height}, "
             f"{video_spec.num_frames} frames @ {video_spec.fps} FPS)"
         )

@@ -46,6 +46,12 @@ class DatasetAdapter(ABC):
     3. Decorate with ``@register_adapter("<name>")``
     4. Add ``from video_mcp.datasets import <name> as _<name>``
        to ``video_mcp/datasets/__init__.py`` so the decorator runs at import.
+
+    VBVR naming convention (all three levels share the same *name*)::
+
+        {generator_id}_{name}_data-generator/
+        └── {name}_task/
+            └── {name}_0000/
     """
 
     @property
@@ -53,6 +59,17 @@ class DatasetAdapter(ABC):
     def name(self) -> str:
         """Short slug used in CLI ``--dataset`` flags, e.g. ``'corecognition'``."""
         ...
+
+    @property
+    @abstractmethod
+    def generator_id(self) -> str:
+        """VBVR-style prefix, e.g. ``'M-1'``, ``'M-2'``."""
+        ...
+
+    @property
+    def generator_name(self) -> str:
+        """Full VBVR generator directory name, e.g. ``'M-1_corecognition_data-generator'``."""
+        return f"{self.generator_id}_{self.name}_data-generator"
 
     @abstractmethod
     def download(self, *, out_dir: Path) -> Path:

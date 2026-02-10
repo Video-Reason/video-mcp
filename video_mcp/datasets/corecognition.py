@@ -302,6 +302,10 @@ class CoreCognitionAdapter(DatasetAdapter):
     def name(self) -> str:
         return "corecognition"
 
+    @property
+    def generator_id(self) -> str:
+        return "M-1"
+
     def download(self, *, out_dir: Path) -> Path:
         return download_corecognition_complete_zip(out_dir=out_dir)
 

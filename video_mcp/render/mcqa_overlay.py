@@ -16,20 +16,43 @@ class Fonts:
     small: ImageFont.FreeTypeFont | ImageFont.ImageFont
 
 
+_FONT_PATH: str | None = None  # resolved on first call
+_FONT_CACHE: dict[int, ImageFont.FreeTypeFont | ImageFont.ImageFont] = {}
+
+
 def _pick_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    # Avoid try/except: only load truetype if file exists.
-    candidates = [
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial.ttf",
-        "/System/Library/Fonts/Supplemental/Helvetica.ttf",
-        "/Library/Fonts/Helvetica.ttf",
-        "/System/Library/Fonts/Supplemental/Verdana.ttf",
-        "/Library/Fonts/Verdana.ttf",
-    ]
-    for p in candidates:
-        if os.path.exists(p):
-            return ImageFont.truetype(p, size=size)
-    return ImageFont.load_default()
+    """Return a TrueType font at *size* pt (cached)."""
+    global _FONT_PATH
+    if size in _FONT_CACHE:
+        return _FONT_CACHE[size]
+
+    if _FONT_PATH is None:
+        candidates = [
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            "/Library/Fonts/Arial.ttf",
+            "/System/Library/Fonts/Supplemental/Helvetica.ttf",
+            "/Library/Fonts/Helvetica.ttf",
+            "/System/Library/Fonts/Supplemental/Verdana.ttf",
+            "/Library/Fonts/Verdana.ttf",
+        ]
+        for p in candidates:
+            if os.path.exists(p):
+                _FONT_PATH = p
+                break
+        if _FONT_PATH is None:
+            _FONT_PATH = ""  # sentinel: use default bitmap font
+
+    if _FONT_PATH:
+        font = ImageFont.truetype(_FONT_PATH, size=size)
+    else:
+        font = ImageFont.load_default()
+    _FONT_CACHE[size] = font
+    return font
+
+
+def _font_size(font: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> int:
+    """Extract point size from a font object (fallback 12 for bitmap fonts)."""
+    return getattr(font, "size", 12)
 
 
 _REF_MIN_DIM = 768  # reference min(w,h) for the original 1024×768 layout
@@ -158,6 +181,39 @@ def draw_corner_choices(
         draw.text((x1 + (box_w - lw) / 2, y1 + (box_h - lh) / 2 - 2), c, font=fonts.title, fill=_LETTER_BASE)
 
 
+def _measure_text_layout(
+    draw: ImageDraw.ImageDraw,
+    *,
+    question: str,
+    choice_list: list[str],
+    q_font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    c_font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    text_max_w: int,
+    q_spacing: int = 8,
+    c_line_spacing: int = 6,
+    c_gap: int = 10,
+    sep_h: int = 30,
+) -> tuple[list[str], list[list[str]], int]:
+    """Wrap all text and return (q_lines, c_wrapped, total_height)."""
+    q_lines = _wrap_text(draw, question, q_font, max_width_px=text_max_w)
+    q_h = 0
+    for ql in q_lines:
+        bb = draw.textbbox((0, 0), ql, font=q_font)
+        q_h += (bb[3] - bb[1]) + q_spacing
+
+    c_wrapped: list[list[str]] = []
+    c_h = 0
+    for opt in choice_list:
+        lines = _wrap_text(draw, opt, c_font, max_width_px=text_max_w)[:3]
+        for ol in lines:
+            ob = draw.textbbox((0, 0), ol, font=c_font)
+            c_h += (ob[3] - ob[1]) + c_line_spacing
+        c_wrapped.append(lines)
+        c_h += c_gap
+
+    return q_lines, c_wrapped, q_h + sep_h + c_h
+
+
 def draw_question_panel(
     canvas: Image.Image,
     *,
@@ -167,12 +223,14 @@ def draw_question_panel(
     fonts: Fonts,
 ) -> None:
     """
-    Two-column panel layout:
-      - Left column : large image
+    Two-column panel layout with **adaptive font sizing**.
+
+      - Left column : source image
       - Right column: question text + choice options
 
-    The panel is sized to sit between the A/B/C/D corner boxes with a
-    small gap so nothing overlaps.
+    When text is too long for the default fonts, the function progressively
+    tries wider text columns and smaller fonts until everything fits
+    without any truncation.
     """
     draw = ImageDraw.Draw(canvas)
     w, h = canvas.size
@@ -215,8 +273,114 @@ def draw_question_panel(
     content_y2 = py2 - pad
     content_h = content_y2 - content_y1
 
-    # Left column — image (55 % of panel width)
-    img_col_w = int(panel_w * 0.55)
+    choice_list = list(choices)[:4]
+    base_body_sz = _font_size(fonts.body)
+    base_small_sz = _font_size(fonts.small)
+    q_spacing = 8
+    c_line_spacing = 6
+    c_gap = 10
+    sep_h = 30  # 12 gap + 2 line + 16 gap
+
+    # --- Adaptive layout search -------------------------------------------
+    # Try (image_column_fraction, font_scale) combos; pick the first where
+    # ALL question lines AND ALL choices fit without truncation.
+    _CONFIGS = [
+        (0.55, 1.0),
+        (0.45, 1.0),
+        (0.55, 0.82),
+        (0.45, 0.82),
+        (0.40, 0.70),
+        (0.35, 0.60),
+        (0.30, 0.52),
+    ]
+
+    best: dict | None = None
+    for img_frac, fscale in _CONFIGS:
+        q_font = _pick_font(max(10, int(round(base_body_sz * fscale))))
+        c_font = _pick_font(max(9, int(round(base_small_sz * fscale))))
+
+        img_col_w = int(panel_w * img_frac)
+        text_x1 = px1 + img_col_w + pad // 2
+        text_x2 = px2 - pad
+        text_max_w = text_x2 - text_x1
+        if text_max_w < 80:
+            continue
+
+        q_lines, c_wrapped, total_h = _measure_text_layout(
+            draw,
+            question=question,
+            choice_list=choice_list,
+            q_font=q_font,
+            c_font=c_font,
+            text_max_w=text_max_w,
+            q_spacing=q_spacing,
+            c_line_spacing=c_line_spacing,
+            c_gap=c_gap,
+            sep_h=sep_h,
+        )
+
+        if total_h <= content_h:
+            best = dict(
+                img_col_w=img_col_w,
+                text_x1=text_x1,
+                text_x2=text_x2,
+                text_max_w=text_max_w,
+                q_font=q_font,
+                c_font=c_font,
+                q_lines=q_lines,
+                c_wrapped=c_wrapped,
+            )
+            break
+
+    # Fallback: smallest config, reserve choices first, fit what we can for
+    # the question (should only trigger for extremely long text).
+    if best is None:
+        fscale = 0.52
+        img_frac = 0.30
+        q_font = _pick_font(max(10, int(round(base_body_sz * fscale))))
+        c_font = _pick_font(max(9, int(round(base_small_sz * fscale))))
+
+        img_col_w = int(panel_w * img_frac)
+        text_x1 = px1 + img_col_w + pad // 2
+        text_x2 = px2 - pad
+        text_max_w = text_x2 - text_x1
+
+        # Measure choices (always keep all).
+        c_wrapped: list[list[str]] = []
+        c_total = 0
+        for opt in choice_list:
+            lines = _wrap_text(draw, opt, c_font, max_width_px=text_max_w)[:3]
+            for ol in lines:
+                ob = draw.textbbox((0, 0), ol, font=c_font)
+                c_total += (ob[3] - ob[1]) + c_line_spacing
+            c_wrapped.append(lines)
+            c_total += c_gap
+
+        q_budget = content_h - c_total - sep_h
+        all_q = _wrap_text(draw, question, q_font, max_width_px=text_max_w)
+        q_lines: list[str] = []
+        accum = 0
+        for ql in all_q:
+            bb = draw.textbbox((0, 0), ql, font=q_font)
+            lh = (bb[3] - bb[1]) + q_spacing
+            if accum + lh > q_budget and q_lines:
+                break
+            q_lines.append(ql)
+            accum += lh
+
+        best = dict(
+            img_col_w=img_col_w,
+            text_x1=text_x1,
+            text_x2=text_x2,
+            text_max_w=text_max_w,
+            q_font=q_font,
+            c_font=c_font,
+            q_lines=q_lines,
+            c_wrapped=c_wrapped,
+        )
+
+    # --- Draw image (left column) -----------------------------------------
+    img_col_w = best["img_col_w"]
     img_x1 = px1 + pad
     img_x2 = px1 + img_col_w - pad // 2
     img_y1 = content_y1
@@ -237,41 +401,37 @@ def draw_question_panel(
         canvas.paste(fitted, (ox, oy))
     else:
         ph = "Image"
-        pb = draw.textbbox((0, 0), ph, font=fonts.body)
+        pb = draw.textbbox((0, 0), ph, font=best["q_font"])
         draw.text(
             (img_x1 + (img_box_w - (pb[2] - pb[0])) / 2,
              img_y1 + (img_box_h - (pb[3] - pb[1])) / 2),
-            ph, font=fonts.body, fill=(100, 100, 100),
+            ph, font=best["q_font"], fill=(100, 100, 100),
         )
 
-    # Right column — question + choices (45 % of panel width)
-    text_x1 = px1 + img_col_w + pad // 2
-    text_x2 = px2 - pad
-    text_max_w = text_x2 - text_x1
+    # --- Draw question text (right column) --------------------------------
+    text_x1 = best["text_x1"]
+    text_x2 = best["text_x2"]
+    q_font = best["q_font"]
+    c_font = best["c_font"]
+
     y = content_y1
+    for ql in best["q_lines"]:
+        draw.text((text_x1, y), ql, font=q_font, fill=(20, 20, 20))
+        bb = draw.textbbox((0, 0), ql, font=q_font)
+        y += (bb[3] - bb[1]) + q_spacing
 
-    # Question text
-    for line in _wrap_text(draw, question, fonts.body, max_width_px=text_max_w)[:5]:
-        draw.text((text_x1, y), line, font=fonts.body, fill=(20, 20, 20))
-        bb = draw.textbbox((0, 0), line, font=fonts.body)
-        y += (bb[3] - bb[1]) + 8
-
-    # Separator
+    # --- Separator ---
     y += 12
     draw.line([(text_x1, y), (text_x2, y)], fill=(180, 180, 180), width=2)
     y += 16
 
-    # Choice options
-    for opt in list(choices)[:4]:
-        if y >= content_y2 - 10:
-            break
-        for ol in _wrap_text(draw, opt, fonts.small, max_width_px=text_max_w)[:2]:
-            if y >= content_y2 - 10:
-                break
-            draw.text((text_x1, y), ol, font=fonts.small, fill=(40, 40, 40))
-            ob = draw.textbbox((0, 0), ol, font=fonts.small)
-            y += (ob[3] - ob[1]) + 6
-        y += 10
+    # --- Choice options ---
+    for lines in best["c_wrapped"]:
+        for ol in lines:
+            draw.text((text_x1, y), ol, font=c_font, fill=(40, 40, 40))
+            ob = draw.textbbox((0, 0), ol, font=c_font)
+            y += (ob[3] - ob[1]) + c_line_spacing
+        y += c_gap
 
 
 def render_video_mcp_frame(

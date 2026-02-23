@@ -7,6 +7,22 @@ Output follows the **[VBVR DataFactory](https://github.com/video-reason/VBVR-Dat
 
 For the authoritative spec, see `docs/VIDEO_MCP_DATA.md`.
 
+## Demo samples (CoreCognition)
+
+**First frame** (no answer highlight -- the model "reads" the question):
+
+| Sample 1 | Sample 2 |
+|---|---|
+| ![first frame 1](docs/examples/demo_first_frame.png) | ![first frame 2](docs/examples/demo2_first_frame.png) |
+
+**Final frame** (correct answer fully highlighted -- B and C respectively):
+
+| Sample 1 (Answer: B) | Sample 2 (Answer: C) |
+|---|---|
+| ![final frame 1](docs/examples/demo_final_frame.png) | ![final frame 2](docs/examples/demo2_final_frame.png) |
+
+The full `ground_truth.mp4` smoothly transitions from the first frame to the final frame over 81 frames (~5 seconds).
+
 ## Quickstart
 
 ### 1. Setup

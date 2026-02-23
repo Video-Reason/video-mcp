@@ -12,12 +12,6 @@ from pydantic import BaseModel, Field
 from video_mcp.process.adapter import DatasetAdapter, McqaVqaSample, register_adapter
 from video_mcp.mcqa import CHOICE_ORDER, Choice, normalize_choice
 
-CORECOGNITION_REPO_ID = "williamium/CoreCognition"
-CORECOGNITION_CONFIG = "complete"
-CORECOGNITION_SPLIT = "train"
-CORECOGNITION_REVISION = "main"
-
-
 class CoreCognitionRawRow(BaseModel):
     id: str
     concept: str | None = None
@@ -310,22 +304,6 @@ class CoreCognitionAdapter(DatasetAdapter):
     @property
     def generator_id(self) -> str:
         return "M-1"
-
-    @property
-    def hf_repo_id(self) -> str | None:
-        return CORECOGNITION_REPO_ID
-
-    @property
-    def hf_config(self) -> str | None:
-        return CORECOGNITION_CONFIG
-
-    @property
-    def hf_split(self) -> str | None:
-        return CORECOGNITION_SPLIT
-
-    @property
-    def hf_revision(self) -> str | None:
-        return CORECOGNITION_REVISION
 
     def download(self, *, out_dir: Path) -> Path:
         return download_corecognition_complete_zip(out_dir=out_dir)

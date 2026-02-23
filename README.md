@@ -1,9 +1,11 @@
 # video-mcp
 Model Context Protocol (MCP)-style **Video-MCQA** dataset utilities.
 
-This repo’s main output is a **Video-MCP dataset**: short clips where the **prompt UI is part of the video** and the **answer is expressed by highlighting A/B/C/D** in later frames.
+This repo's main output is a **Video-MCP dataset**: short clips where the **prompt UI is part of the video** and the **answer is expressed by highlighting A/B/C/D** in later frames.
 
-For the authoritative spec, see `docs/VIDEO_MCP_DATA.md` (kept in sync with code).
+Output follows the **[VBVR DataFactory](https://github.com/video-reason/VBVR-DataFactory)** directory convention so that generated data is directly compatible with the VBVR pipeline.
+
+For the authoritative spec, see `docs/VIDEO_MCP_DATA.md`.
 
 ## Quickstart
 
@@ -31,7 +33,7 @@ HF_TOKEN=...
 source venv/bin/activate
 ```
 
-Download raw data (default: `data/raw/`) and build Video-MCP outputs (default: `questions/`):
+Download raw data and build processed Video-MCP outputs:
 
 ```bash
 python -m video_mcp.dataset download --dataset corecognition
@@ -49,8 +51,8 @@ python -m video_mcp.dataset process  --dataset scienceqa --limit 50
 
 Default output specs are aligned with **Wan2.2-I2V-A14B** fine-tuning requirements:
 
-- **Resolution**: 832×480 (480p tier)
-- **Frames**: 81 @ 16 FPS (~5.06 seconds)
+- **Resolution**: 832x480 (480p tier)
+- **Frames**: 81 @ 16 FPS (~5 seconds)
 - **Codec**: H.264, yuv420p, MP4 container
 
 Override with CLI flags:
@@ -65,33 +67,104 @@ python -m video_mcp.dataset process --dataset corecognition --num-frames 49
 
 **Constraints** (enforced by Pydantic validators):
 - Width and height must be divisible by **8** (VAE spatial compression)
-- Frame count must satisfy **1 + 4k** where k ≥ 0 (VAE temporal compression): 1, 5, 9, 13, ..., 49, ..., 81
+- Frame count must satisfy **1 + 4k** where k >= 0 (VAE temporal compression): 1, 5, 9, 13, ..., 49, ..., 81
 
 ### Additional options
 
-- `--limit N` — Build only the first N samples (useful for quick testing)
-- `--lit-style darken` (default) or `--lit-style red_border` — How the correct answer is highlighted
+- `--limit N` -- Build only the first N samples (useful for quick testing)
+- `--lit-style darken` (default) or `--lit-style red_border` -- How the correct answer is highlighted
 
 ### Requirements
 
 - `ffmpeg` must be on the system PATH (used to compile frames into MP4 video)
 
+## Output format (VBVR-compatible)
+
+All outputs follow the **VBVR DataFactory** directory convention:
+
+```
+questions/
+└── M-1_corecognition_data-generator/
+    ├── clip_config.json
+    └── corecognition_task/
+        ├── corecognition_0000/
+        │   ├── first_frame.png          # rendered frame 0 (no answer highlight)
+        │   ├── prompt.txt               # question + choices + answer (plain text)
+        │   ├── final_frame.png          # rendered last frame (answer fully highlighted)
+        │   ├── ground_truth.mp4         # full clip with progressive answer reveal
+        │   └── original/
+        │       ├── question.json        # structured metadata (Pydantic)
+        │       └── <source_image>.png   # raw VQA image from dataset
+        ├── corecognition_0001/
+        │   └── [same structure]
+        └── ...
+```
+
+**Structure breakdown (VBVR convention):**
+- **Root:** `questions/` -- all generated data
+- **Generator:** `{generator_id}_{name}_data-generator/` -- e.g. `M-1_corecognition_data-generator/`
+- **Task:** `{name}_task/` -- task-specific directory
+- **Instances:** `{name}_{NNNN}/` -- individual samples with 4-digit zero-padded indices
+- **VBVR files:** `first_frame.png` and `prompt.txt` are required; `final_frame.png` and `ground_truth.mp4` are optional
+- **original/** -- video-mcp extra: preserves source data for traceability (invisible to VBVR validator)
+
+### Frame layout
+
+Each frame uses a **two-column panel** (image on left, question + choices on right)
+with A/B/C/D answer boxes in the four corners of the frame.
+
+- **first_frame.png** (frame 0): Question panel visible, no answer highlighted.
+- **final_frame.png** (last frame): Correct answer fully highlighted.
+- **ground_truth.mp4**: Full clip -- progressive answer reveal across all frames.
+
+### Highlight styles (`--lit-style`)
+
+| Style | Effect |
+|---|---|
+| `darken` (default) | Correct corner box gradually darkens |
+| `red_border` | Thick red outline gradually appears around the correct corner box |
+
+### prompt.txt format
+
+```
+What color is the object in the image?
+
+A: Red
+B: Blue
+C: Green
+D: Yellow
+
+Answer: A
+```
+
+## Registered generators
+
+| Generator ID | Name | Dataset | HF Source |
+|---|---|---|---|
+| `M-1` | `corecognition` | CoreCognition | `williamium/CoreCognition` |
+| `M-2` | `scienceqa` | ScienceQA | `derek-thomas/ScienceQA` |
+| `M-3` | `mathvision` | MathVision | `MathLLMs/MathVision` |
+| `M-4` | `phyx` | PhyX | `Cloudriver/PhyX` |
+
+See [docs/DATASET.md](docs/DATASET.md) for detailed status and commands per dataset.
+
 ## Adding a new dataset
 
 Every dataset lives in its own file under `video_mcp/datasets/`. The generic
 processing pipeline (`process/`), CLI, and all build scripts work with any
-dataset automatically — you never need to touch them.
+dataset automatically -- you never need to touch them.
 
 ### 1. Create the adapter file
 
-Create `video_mcp/datasets/<name>.py` (e.g. `video_mcp/datasets/scienceqa.py`).
+Create `video_mcp/datasets/<name>.py` (e.g. `video_mcp/datasets/mydataset.py`).
 
 Your file must define a class that inherits from `DatasetAdapter` and implements
-three methods:
+four methods:
 
 | Method | Purpose |
 |---|---|
 | `name` (property) | Short slug used in `--dataset` flags, e.g. `"scienceqa"` |
+| `generator_id` (property) | VBVR-style prefix, e.g. `"M-2"` |
 | `download(*, out_dir)` | Download the raw data and return the local path |
 | `iter_mcqa_vqa()` | Yield `(McqaVqaSample, image_bytes)` pairs |
 
@@ -117,6 +190,10 @@ class ScienceQaAdapter(DatasetAdapter):
     def name(self) -> str:
         return "scienceqa"
 
+    @property
+    def generator_id(self) -> str:
+        return "M-2"
+
     def download(self, *, out_dir: Path) -> Path:
         # Download or locate the raw data; return the artifact path.
         ...
@@ -126,7 +203,12 @@ class ScienceQaAdapter(DatasetAdapter):
         ...
 ```
 
-See `video_mcp/datasets/corecognition.py` for a complete working example.
+This would produce output at:
+```
+questions/M-2_scienceqa_data-generator/scienceqa_task/scienceqa_0000/
+```
+
+See `video_mcp/datasets/corecognition.py` for a complete working example, or read the full guide at [docs/ADD_DATASET.md](docs/ADD_DATASET.md).
 
 ### 2. Register it
 
@@ -142,83 +224,6 @@ That's it. The new dataset is now available everywhere:
 python -m video_mcp.dataset download  --dataset scienceqa
 python -m video_mcp.dataset process   --dataset scienceqa
 ```
-
-## Output format
-
-This project writes two kinds of outputs:
-
-- **Raw downloads** (gitignored): `data/raw/<dataset>/...`
-- **Processed Video-MCP clips** (gitignored, default): `questions/`
-
-### Naming rules (must match code output)
-
-Processing uses the **VBVR DataFactory** layout and naming conventions:
-
-- Generator directory: `{generator_id}_{dataset}_data-generator/`
-  - Example: `M-2_scienceqa_data-generator/`
-- Task directory: `{dataset}_task/`
-  - Example: `scienceqa_task/`
-- Sample directory: `{dataset}_{NNNN}/` where `NNNN` is a **zero-based**, 4-digit, zero-padded index
-  - Example: `scienceqa_0000/`, `scienceqa_0049/`
-
-### Folder layout (per sample)
-
-```
-questions/
-  M-2_scienceqa_data-generator/
-  clip_config.json
-  run_manifest.json
-  run_manifests/
-    20260210T192842Z.json
-  scienceqa_task/
-    scienceqa_0000/
-      first_frame.png            # required: input image for i2v generation
-      prompt.txt                 # required: question + choices + answer text
-      final_frame.png            # optional: expected final frame for evaluation
-      ground_truth.mp4           # optional: reference video for evaluation
-      original/
-        question.json            # structured question/choices/answer + provenance
-        <original_image_file>    # preserved original (PNG/JPG/JPEG)
-```
-
-Notes:
-
-- `first_frame.png` / `final_frame.png` are always written as PNG.
-- The original image is preserved with its original filename/extension (commonly `.png`, `.jpg`, `.jpeg`).
-- Intermediate per-frame PNGs (`frame_0000.png`...) are rendered in a temp directory and are not kept.
-
-### `clip_config.json`
-
-Written once per generator directory:
-
-- `fps`, `seconds`, `num_frames`, `width`, `height`
-
-### Run manifest (`run_manifest.json`)
-
-Every `process` run writes:
-
-- `questions/<generator>/run_manifest.json` (latest)
-- `questions/<generator>/run_manifests/<UTC_RUN_ID>.json` (history)
-
-It records:
-
-- dataset identity (`hf_repo_id`, `hf_config`, `hf_split`, `hf_revision` when provided by the adapter)
-- processing parameters (fps/seconds/num_frames/width/height, lit style, limit)
-- code version (git commit/branch when available)
-- runtime (`python_version`, `ffmpeg_version`)
-
-Each frame uses a **two-column panel** (image on left, question + choices on right)
-with A/B/C/D answer boxes in the four corners of the frame.
-
-- **Frame 0**: Question panel visible, no answer highlighted.
-- **Frames 1–80** (default): Correct answer gradually highlights across the full clip duration.
-
-### Highlight styles (`--lit-style`)
-
-| Style | Effect |
-|---|---|
-| `darken` (default) | Correct corner box gradually darkens |
-| `red_border` | Thick red outline gradually appears around the correct corner box |
 
 ## S3 upload
 

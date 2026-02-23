@@ -13,12 +13,6 @@ from video_mcp.mcqa import CHOICE_ORDER, Choice, normalize_choice
 from video_mcp.process.adapter import DatasetAdapter, McqaVqaSample, register_adapter
 
 
-SCIENCEQA_REPO_ID = "derek-thomas/ScienceQA"
-SCIENCEQA_CONFIG = "default"
-SCIENCEQA_SPLIT = "all"
-SCIENCEQA_REVISION = "main"
-
-
 def _choice_from_index(index: int) -> Choice | None:
     if index < 0 or index >= len(CHOICE_ORDER):
         return None
@@ -93,7 +87,7 @@ def _load_scienceqa() -> dict[str, Any]:
     if local_repo.exists() and any(local_repo.iterdir()):
         return load_dataset(str(local_repo), cache_dir=str(cache_dir), token=token)
 
-    return load_dataset(SCIENCEQA_REPO_ID, cache_dir=str(cache_dir), token=token)
+    return load_dataset("derek-thomas/ScienceQA", cache_dir=str(cache_dir), token=token)
 
 
 def iter_scienceqa_mcqa_vqa() -> Iterator[tuple[McqaVqaSample, bytes]]:
@@ -145,28 +139,12 @@ class ScienceQaAdapter(DatasetAdapter):
     def generator_id(self) -> str:
         return "M-2"
 
-    @property
-    def hf_repo_id(self) -> str | None:
-        return SCIENCEQA_REPO_ID
-
-    @property
-    def hf_config(self) -> str | None:
-        return SCIENCEQA_CONFIG
-
-    @property
-    def hf_split(self) -> str | None:
-        return SCIENCEQA_SPLIT
-
-    @property
-    def hf_revision(self) -> str | None:
-        return SCIENCEQA_REVISION
-
     def download(self, *, out_dir: Path) -> Path:
         token = os.environ.get("HF_TOKEN") or None
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         local_path = snapshot_download(
-            repo_id=SCIENCEQA_REPO_ID,
+            repo_id="derek-thomas/ScienceQA",
             repo_type="dataset",
             token=token,
             local_dir=str(out_dir),

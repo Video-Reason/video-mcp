@@ -94,18 +94,6 @@ class PhyXAdapter(DatasetAdapter):
     def generator_id(self) -> str:
         return "M-4"
 
-    @property
-    def hf_repo_id(self) -> str | None:
-        return PHYX_REPO_ID
-
-    @property
-    def hf_config(self) -> str | None:
-        return PHYX_CONFIG
-
-    @property
-    def hf_split(self) -> str | None:
-        return PHYX_SPLIT
-
     # ---- download ---------------------------------------------------------
 
     def download(self, *, out_dir: Path) -> Path:

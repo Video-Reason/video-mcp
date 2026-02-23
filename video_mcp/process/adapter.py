@@ -71,26 +71,6 @@ class DatasetAdapter(ABC):
         """Full VBVR generator directory name, e.g. ``'M-1_corecognition_data-generator'``."""
         return f"{self.generator_id}_{self.name}_data-generator"
 
-    @property
-    def hf_repo_id(self) -> str | None:
-        """Optional Hugging Face dataset repo id (for run manifest tracking)."""
-        return None
-
-    @property
-    def hf_config(self) -> str | None:
-        """Optional Hugging Face dataset config/subset name."""
-        return None
-
-    @property
-    def hf_split(self) -> str | None:
-        """Optional split used by processing."""
-        return None
-
-    @property
-    def hf_revision(self) -> str | None:
-        """Optional pinned revision/commit/tag used for data download."""
-        return None
-
     @abstractmethod
     def download(self, *, out_dir: Path) -> Path:
         """Download the raw dataset artifact and return its local path."""

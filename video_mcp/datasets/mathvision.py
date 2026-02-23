@@ -39,10 +39,6 @@ def _load_mathvision(*, split: str = "test"):
 # ---------------------------------------------------------------------------
 
 
-MATHVISION_REPO_ID = "MathLLMs/MathVision"
-MATHVISION_SPLIT = "test"
-
-
 @register_adapter("mathvision")
 class MathVisionAdapter(DatasetAdapter):
     """
@@ -61,14 +57,6 @@ class MathVisionAdapter(DatasetAdapter):
     @property
     def generator_id(self) -> str:
         return "M-3"
-
-    @property
-    def hf_repo_id(self) -> str | None:
-        return MATHVISION_REPO_ID
-
-    @property
-    def hf_split(self) -> str | None:
-        return MATHVISION_SPLIT
 
     # ---- download ---------------------------------------------------------
 

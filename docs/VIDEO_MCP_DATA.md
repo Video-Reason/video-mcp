@@ -121,6 +121,7 @@ For each clip:
 |---|---|
 | `darken` (default) | Correct corner box gradually darkens; letter stays dark |
 | `red_border` | Thick red outline gradually appears around the correct corner box |
+| `circle` | Black ellipse gradually appears around the correct corner box |
 
 ## prompt.txt format
 
@@ -170,7 +171,7 @@ python -m video_mcp.dataset process  --dataset <name>
 Options for `process`:
 - `--out-dir PATH` -- output root (default: `questions/`)
 - `--limit N` -- build only the first N samples (useful for quick testing)
-- `--lit-style darken|red_border` -- choose the highlight style (default: `darken`)
+- `--lit-style darken|red_border|circle` -- choose the highlight style (default: `darken`)
 - `--width N` -- frame width in px, must be divisible by 8 (default: 832)
 - `--height N` -- frame height in px, must be divisible by 8 (default: 480)
 - `--num-frames N` -- frames per clip, must satisfy `1 + 4k` (default: 81)

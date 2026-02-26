@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> None:
         type=str,
         choices=list(LIT_STYLES),
         default="darken",
-        help="How the correct answer is highlighted: 'darken' darkens the box, 'red_border' draws a red outline.",
+        help="How the correct answer is highlighted: 'darken' darkens the box, 'red_border' draws a red outline, 'circle' draws a black ellipse around the box.",
     )
     proc.add_argument(
         "--width",

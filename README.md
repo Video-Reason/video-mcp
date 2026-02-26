@@ -80,7 +80,7 @@ python -m video_mcp.dataset process --dataset corecognition --num-frames 49
 ### Additional options
 
 - `--limit N` -- Build only the first N samples (useful for quick testing)
-- `--lit-style darken` (default) or `--lit-style red_border` -- How the correct answer is highlighted
+- `--lit-style darken` (default), `--lit-style red_border`, or `--lit-style circle` -- How the correct answer is highlighted
 
 ### Requirements
 
@@ -131,6 +131,7 @@ with A/B/C/D answer boxes in the four corners of the frame.
 |---|---|
 | `darken` (default) | Correct corner box gradually darkens |
 | `red_border` | Thick red outline gradually appears around the correct corner box |
+| `circle` | Black ellipse gradually appears around the correct corner box |
 
 ### prompt.txt format
 

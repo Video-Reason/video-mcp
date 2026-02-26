@@ -135,6 +135,11 @@ _BOX_DARKEN: tuple[int, int, int] = (140, 140, 140)
 _RED_BORDER: tuple[int, int, int] = (220, 30, 30)
 _RED_BORDER_WIDTH = 6
 
+# "circle" style: black ellipse around the correct corner box.
+_CIRCLE_COLOR: tuple[int, int, int] = (0, 0, 0)
+_CIRCLE_MAX_WIDTH = 5
+_CIRCLE_PAD = 6
+
 
 def draw_corner_choices(
     canvas: Image.Image,
@@ -168,10 +173,14 @@ def draw_corner_choices(
             fill = _lerp_color(_BOX_BASE, _BOX_DARKEN, t)
             outline = _OUTLINE_BASE
             outline_w = 3
-        else:  # red_border
+        elif lit_style == "red_border":
             fill = _BOX_BASE
             outline = _lerp_color(_OUTLINE_BASE, _RED_BORDER, t)
             outline_w = int(round(3 + (_RED_BORDER_WIDTH - 3) * t)) if is_target else 3
+        else:  # circle
+            fill = _BOX_BASE
+            outline = _OUTLINE_BASE
+            outline_w = 3
 
         draw.rounded_rectangle([x1, y1, x2, y2], radius=radius, fill=fill, outline=outline, width=outline_w)
 
@@ -179,6 +188,15 @@ def draw_corner_choices(
         lw = bb[2] - bb[0]
         lh = bb[3] - bb[1]
         draw.text((x1 + (box_w - lw) / 2, y1 + (box_h - lh) / 2 - 2), c, font=fonts.title, fill=_LETTER_BASE)
+
+        if lit_style == "circle" and is_target and t > 0:
+            ew = int(round(_CIRCLE_MAX_WIDTH * t))
+            if ew >= 1:
+                draw.ellipse(
+                    [x1 - _CIRCLE_PAD, y1 - _CIRCLE_PAD, x2 + _CIRCLE_PAD, y2 + _CIRCLE_PAD],
+                    outline=_CIRCLE_COLOR,
+                    width=ew,
+                )
 
 
 def _measure_text_layout(
